@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SalesIQ - Sales Call Analysis Platform</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+<script src="https://sites.super.betamyninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Left Navigation -->
+        <nav class="left-nav">
+            <div class="nav-header">
+                <div class="nav-header-avatar">
+                    <img src="/static/images/salesiq-avatar.png" alt="SalesIQ">
+                </div>
+                <div class="nav-header-text">
+                    <h1>SalesIQ</h1>
+                    <p>Sales Intelligence Platform</p>
+                </div>
+            </div>
+            <div class="nav-menu">
+                <div class="nav-item active" data-page="chat">
+                    <span class="nav-item-icon">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                            <circle cx="8" cy="10" r="1.5"/>
+                            <circle cx="12" cy="10" r="1.5"/>
+                            <circle cx="16" cy="10" r="1.5"/>
+                        </svg>
+                    </span>
+                    <span>Chat Assistant</span>
+                </div>
+                <div class="nav-item" data-page="reports">
+                    <span class="nav-item-icon">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                        </svg>
+                    </span>
+                    <span>Reports</span>
+                </div>
+                <div class="nav-item" data-page="media">
+                    <span class="nav-item-icon">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/>
+                        </svg>
+                    </span>
+                    <span>Media Library</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="content-header">
+                <h2>SalesIQ Chat Assistant</h2>
+            </header>
+            
+            <div class="content-body">
+                <!-- Chat Page -->
+                <div id="chat-page" class="page active">
+                    <div class="chat-container">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="message assistant">
+                                <div class="message-avatar">
+                                    <img src="/static/images/salesiq-avatar.png" alt="SalesIQ">
+                                </div>
+                                <div class="message-content">
+                                    <strong>Welcome to SalesIQ!</strong> I'm your AI sales assistant. I can help you analyze sales calls by:
+                                    <br><br>
+                                    • Transcribing audio recordings<br>
+                                    • Identifying key discussion points<br>
+                                    • Analyzing customer sentiment<br>
+                                    • Extracting action items<br>
+                                    • Providing strategic insights<br>
+                                    <br>
+                                    Upload an MP3 file of your sales call to get started, or ask me anything about sales analysis!
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="chat-input-area">
+                            <div class="upload-section">
+                                <label for="audioFile" class="upload-label">
+                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 20px; height: 20px; fill: currentColor;">
+                                        <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4 1.79-4 4-4c.58 0 1.14.13 1.64.36V8h4.36v-2h-6v8.5c0 1.38-1.12 2.5-2.5 2.5S7.5 15.88 7.5 14.5s1.12-2.5 2.5-2.5c.19 0 .38.02.56.07V6c0-1.1.9-2 2-2h2c1.1 0 2 .9 2 2z"/>
+                                    </svg>
+                                    <span>Upload Sales Call Audio (MP3, WAV, M4A, OGG)</span>
+                                </label>
+                                <input type="file" id="audioFile" accept=".mp3,.wav,.m4a,.ogg">
+                                <div id="selectedFile" class="selected-file"></div>
+                            </div>
+                            
+                            <form id="chatForm" class="chat-input-form">
+                                <input 
+                                    type="text" 
+                                    id="messageInput" 
+                                    class="chat-input" 
+                                    placeholder="Type your message or upload an audio file..."
+                                    autocomplete="off"
+                                >
+                                <button type="submit" class="btn btn-primary">Send</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports Page -->
+                <div id="reports-page" class="page">
+                    <div id="reportsContainer" class="reports-grid">
+                        <!-- Reports will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Media Library Page -->
+                <div id="media-page" class="page">
+                    <div id="mediaContainer" class="media-grid">
+                        <!-- Media files will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Report Detail Modal -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeReportModal()">×</button>
+            <div id="reportModalBody">
+                <!-- Report details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
