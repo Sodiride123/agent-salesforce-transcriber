@@ -316,27 +316,6 @@ function showReportModal(report) {
                     </button>
                 </div>
                 
-                <!-- Schedule Meeting -->
-                <div class="salesforce-subsection">
-                    <h4>Schedule Follow-up Meeting</h4>
-                    <p style="color: #64748b; font-size: 14px; margin-bottom: 10px;">
-                        Based on next steps: ${escapeHtml(report.analysis.next_steps)}
-                    </p>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                        <div>
-                            <label for="meetingDate">Date:</label>
-                            <input type="date" id="meetingDate" style="width: 100%; margin-top: 4px;">
-                        </div>
-                        <div>
-                            <label for="meetingTime">Time:</label>
-                            <input type="time" id="meetingTime" style="width: 100%; margin-top: 4px;">
-                        </div>
-                    </div>
-                    <button class="btn" onclick="scheduleFollowUpMeeting('${report.id}')">
-                        Schedule Meeting
-                    </button>
-                </div>
-                
                 <!-- Update Account -->
                 <div class="salesforce-subsection">
                     <h4>Update Account Information</h4>
@@ -344,7 +323,7 @@ function showReportModal(report) {
                         Add customer needs to account notes:
                     </p>
                     <textarea id="accountNotes" rows="4" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: inherit;">
-${report.analysis.customer_needs.map(need => `• ${need}`).join('\n')}
+${(report.analysis.customer_needs || []).map(need => `• ${need}`).join('\n') || 'No customer needs identified'}
                     </textarea>
                     <button class="btn" onclick="updateAccountFromReport('${report.id}')" style="margin-top: 10px;">
                         Update Account
@@ -521,9 +500,9 @@ async function searchAccounts(reportId) {
         }
         
         // Handle different response formats
-        const accounts = data.accounts || data.result || data;
+        const accounts = data.records || data.accounts || data.result || data;
         
-        if (!accounts || accounts.length === 0) {
+        if (!accounts || !Array.isArray(accounts) || accounts.length === 0) {
             resultsDiv.innerHTML = '<p style="color: #64748b;">No accounts found</p>';
             return;
         }
@@ -531,10 +510,10 @@ async function searchAccounts(reportId) {
         resultsDiv.innerHTML = `
             <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
                 ${accounts.map(account => `
-                    <div class="account-result" onclick="selectAccount('${account.Id}', '${escapeHtml(account.Name)}')" 
+                    <div class="account-result" onclick="selectAccount('${account.accountId || account.Id}', '${escapeHtml(account.name || account.Name)}')" 
                          style="padding: 10px; cursor: pointer; border-bottom: 1px solid #e2e8f0; transition: background 0.2s;">
-                        <strong>${escapeHtml(account.Name)}</strong>
-                        ${account.Industry ? `<br><small style="color: #64748b;">${escapeHtml(account.Industry)}</small>` : ''}
+                        <strong>${escapeHtml(account.name || account.Name)}</strong>
+                        ${(account.industry || account.Industry) ? `<br><small style="color: #64748b;">${escapeHtml(account.industry || account.Industry)}</small>` : ''}
                     </div>
                 `).join('')}
             </div>
@@ -625,58 +604,7 @@ async function createTasksFromReport(reportId) {
     }
 }
 
-async function scheduleFollowUpMeeting(reportId) {
-    const statusDiv = document.getElementById('salesforceStatus');
-    
-    if (!selectedAccountId) {
-        statusDiv.innerHTML = '<p style="color: #ef4444;">Please select a Salesforce account first</p>';
-        return;
-    }
-    
-    const dateInput = document.getElementById('meetingDate');
-    const timeInput = document.getElementById('meetingTime');
-    
-    if (!dateInput.value || !timeInput.value) {
-        statusDiv.innerHTML = '<p style="color: #ef4444;">Please select both date and time for the meeting</p>';
-        return;
-    }
-    
-    statusDiv.innerHTML = '<p style="color: #3b82f6;">Scheduling meeting...</p>';
-    
-    try {
-        // Combine date and time
-        const startDateTime = `${dateInput.value}T${timeInput.value}:00`;
-        const endDateTime = new Date(new Date(startDateTime).getTime() + 60 * 60 * 1000).toISOString();
-        
-        const response = await fetch('/api/salesforce/create-event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                subject: 'Follow-up Meeting',
-                description: document.querySelector('.salesforce-subsection:nth-child(3) p').textContent.replace('Based on next steps: ', ''),
-                start_datetime: startDateTime,
-                end_datetime: endDateTime,
-                account_id: selectedAccountId
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            statusDiv.innerHTML = `
-                <p style="color: #10b981;">
-                    ✓ Successfully scheduled follow-up meeting in Salesforce!
-                </p>
-            `;
-        } else {
-            statusDiv.innerHTML = `<p style="color: #ef4444;">Error scheduling meeting: ${escapeHtml(data.error)}</p>`;
-        }
-        
-    } catch (error) {
-        console.error('Error scheduling meeting:', error);
-        statusDiv.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(error.message)}</p>`;
-    }
-}
+
 
 async function updateAccountFromReport(reportId) {
     const statusDiv = document.getElementById('salesforceStatus');
@@ -724,6 +652,8 @@ async function updateAccountFromReport(reportId) {
         statusDiv.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(error.message)}</p>`;
     }
 }
+
+
 
 // Close modal when clicking outside
 document.addEventListener('click', (e) => {

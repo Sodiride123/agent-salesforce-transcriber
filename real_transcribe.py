@@ -27,9 +27,18 @@ def transcribe_audio_real(file_path):
         elif file_path.startswith('workspace/'):
             full_path = os.path.join('/workspace', file_path[10:])
             relative_path = file_path[10:]
-        else:
-            full_path = os.path.join('/workspace', file_path)
+        elif os.path.isabs(file_path):
+            full_path = file_path
             relative_path = file_path
+        else:
+            # If relative path, check from current working directory first
+            if os.path.exists(file_path):
+                full_path = os.path.abspath(file_path)
+                relative_path = file_path
+            else:
+                # Fall back to /workspace
+                full_path = os.path.join('/workspace', file_path)
+                relative_path = file_path
         
         # Verify file exists
         if not os.path.exists(full_path):
@@ -47,7 +56,7 @@ def transcribe_audio_real(file_path):
         
         # Initialize OpenAI client with SuperNinja endpoint
         client = openai.OpenAI(
-            api_key="sk-uwdHrdHO6TE7Hnj1azmb9g",
+            api_key="sk-bRi4jzJTrkmv4rdGUCAwsw",
             base_url="https://model-gateway.public.beta.myninja.ai"
         )
         

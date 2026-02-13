@@ -34,10 +34,27 @@ def allowed_file(filename):
 def call_mcp_tool(tool_name, args_json):
     """Call Salesforce MCP tools"""
     try:
-        cmd = f"mcp-tools call {tool_name} '{args_json}'"
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        # Use list form of subprocess to avoid shell escaping issues
+        result = subprocess.run(
+            ['mcp-tools', 'call', tool_name, args_json],
+            capture_output=True, 
+            text=True
+        )
         if result.returncode == 0:
-            return json.loads(result.stdout)
+            # Strip debug messages from mcp-tools output
+            # The JSON starts with { or [
+            output = result.stdout
+            json_start = -1
+            for i, char in enumerate(output):
+                if char in ['{', '[']:
+                    json_start = i
+                    break
+            
+            if json_start >= 0:
+                json_str = output[json_start:]
+                return json.loads(json_str)
+            else:
+                return {"error": "No JSON found in output"}
         else:
             return {"error": result.stderr}
     except Exception as e:
@@ -50,7 +67,7 @@ def analyze_sales_call(transcription, filename):
     try:
         # Use SuperNinja AI to analyze the transcription
         client = openai.OpenAI(
-            api_key="sk-uwdHrdHO6TE7Hnj1azmb9g",
+            api_key="sk-bRi4jzJTrkmv4rdGUCAwsw",
             base_url="https://model-gateway.public.beta.myninja.ai"
         )
         
@@ -318,22 +335,29 @@ def create_salesforce_tasks():
         try:
             # Use Salesforce query tool to insert tasks
             # Build the SOQL INSERT equivalent using REST API pattern
+            whatid_field = 'WhatId,' if account_id else ''
+            whoid_field = 'WhoId,' if contact_id else ''
+            whatid_value = f"'{account_id}'," if account_id else ''
+            whoid_value = f"'{contact_id}'," if contact_id else ''
+            escaped_item = item.replace("'", "\\'")
+            activity_date = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
+            
             task_query = f"""
             INSERT INTO Task (
                 Subject, 
                 Status, 
                 Priority, 
                 ActivityDate,
-                {f'WhatId,' if account_id else ''}
-                {f'WhoId,' if contact_id else ''}
+                {whatid_field}
+                {whoid_field}
                 Description
             ) VALUES (
-                '{item.replace("'", "\\'")}',
+                '{escaped_item}',
                 'Not Started',
                 'Normal',
-                '{(datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')}',
-                {f"'{account_id}'," if account_id else ''}
-                {f"'{contact_id}'," if contact_id else ''}
+                '{activity_date}',
+                {whatid_value}
+                {whoid_value}
                 'Created from SalesIQ call analysis'
             )
             """
@@ -360,30 +384,86 @@ def create_salesforce_tasks():
 
 @app.route('/api/salesforce/create-event', methods=['POST'])
 def create_salesforce_event():
-    """Create an event/meeting in Salesforce"""
+    """
+    Create an event/meeting record in Salesforce
+    
+    Note: The Salesforce MCP doesn't currently expose Event creation.
+    This endpoint stores meeting information in the Account Description field
+    as a workaround until Event creation is added to the MCP.
+    """
     data = request.json
     
     try:
-        event_data = {
-            "Subject": data.get('subject', 'Follow-up Meeting'),
-            "Description": data.get('description', ''),
-            "StartDateTime": data.get('start_datetime'),
-            "EndDateTime": data.get('end_datetime'),
-            "Location": data.get('location', 'Virtual'),
-            "WhatId": data.get('account_id'),
-            "WhoId": data.get('contact_id')
-        }
+        account_id = data.get('account_id')
+        if not account_id:
+            return jsonify({
+                "success": False,
+                "error": "account_id is required"
+            }), 400
         
-        # Note: Standard Salesforce MCP doesn't include Event creation
-        # This would require Salesforce REST API integration
-        # For now, we'll return a success response with the event details
+        # Prepare meeting information
+        subject = data.get('subject', 'Sales Call')
+        description = data.get('description', '')
+        start_datetime = data.get('start_datetime', '')
+        end_datetime = data.get('end_datetime', '')
+        location = data.get('location', 'Virtual')
         
-        return jsonify({
-            "success": True,
-            "event_data": event_data,
-            "message": "Event queued for creation",
-            "note": "Full event creation requires Salesforce REST API integration"
-        })
+        # Format meeting notes
+        from datetime import datetime
+        meeting_date = datetime.now().strftime('%Y-%m-%d %H:%M')
+        if start_datetime:
+            try:
+                meeting_date = datetime.fromisoformat(start_datetime.replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M')
+            except:
+                pass
+        
+        meeting_notes = f"""
+=== Meeting: {subject} ===
+Date: {meeting_date}
+Location: {location}
+
+Notes:
+{description}
+
+---
+"""
+        
+        # Get current account description
+        account_query = f"SELECT Id, Description FROM Account WHERE Id = '{account_id}'"
+        result = call_mcp_tool('salesforce_query', json.dumps({"query": account_query}))
+        
+        current_description = ""
+        if result and 'records' in result and len(result['records']) > 0:
+            current_description = result['records'][0].get('Description', '') or ''
+        
+        # Append meeting notes to account description
+        updated_description = meeting_notes + current_description
+        
+        # Update account with meeting notes
+        update_result = call_mcp_tool('salesforce_update_account', json.dumps({
+            "account_id": account_id,
+            "account_data": {
+                "Description": updated_description
+            }
+        }))
+        
+        if update_result and update_result.get('success'):
+            return jsonify({
+                "success": True,
+                "message": "Meeting notes added to Account Description",
+                "meeting_data": {
+                    "subject": subject,
+                    "date": meeting_date,
+                    "location": location,
+                    "account_id": account_id
+                },
+                "note": "Meeting information stored in Account Description field. Full Event object creation requires Salesforce MCP extension."
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to update account with meeting notes"
+            }), 500
         
     except Exception as e:
         return jsonify({
@@ -398,15 +478,24 @@ def update_salesforce_account():
     account_id = data.get('account_id')
     updates = data.get('updates', {})
     
+    print(f"[UPDATE_ACCOUNT] Received request - Account ID: {account_id}", file=sys.stderr)
+    print(f"[UPDATE_ACCOUNT] Updates: {updates}", file=sys.stderr)
+    
     try:
         # Use MCP tool to update account
-        result = call_mcp_tool('salesforce_update_account', json.dumps({
+        mcp_args = {
             "account_id": account_id,
             "account_data": updates
-        }))
+        }
+        print(f"[UPDATE_ACCOUNT] Calling MCP with: {mcp_args}", file=sys.stderr)
+        
+        result = call_mcp_tool('salesforce_update_account', json.dumps(mcp_args))
+        
+        print(f"[UPDATE_ACCOUNT] MCP Result: {result}", file=sys.stderr)
         
         # Check if the result contains an error
         if isinstance(result, dict) and 'error' in result:
+            print(f"[UPDATE_ACCOUNT] Error from MCP: {result['error']}", file=sys.stderr)
             return jsonify({
                 "success": False,
                 "error": result['error']
@@ -419,6 +508,9 @@ def update_salesforce_account():
         })
         
     except Exception as e:
+        print(f"[UPDATE_ACCOUNT] Exception: {str(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return jsonify({
             "success": False,
             "error": str(e)

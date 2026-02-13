@@ -35,7 +35,7 @@ def transcribe_with_ninja(file_path):
     """Transcribe audio using SuperNinja transcription"""
     try:
         client = openai.OpenAI(
-            api_key="sk-uwdHrdHO6TE7Hnj1azmb9g",
+            api_key="sk-bRi4jzJTrkmv4rdGUCAwsw",
             base_url="https://model-gateway.public.beta.myninja.ai"
         )
         
@@ -56,7 +56,7 @@ def add_speaker_labels_with_ai(transcription):
     """Use AI to identify and label speakers in the transcription"""
     try:
         client = openai.OpenAI(
-            api_key="sk-uwdHrdHO6TE7Hnj1azmb9g",
+            api_key="sk-bRi4jzJTrkmv4rdGUCAwsw",
             base_url="https://model-gateway.public.beta.myninja.ai"
         )
         
@@ -99,7 +99,7 @@ def analyze_speakers(labeled_transcription):
     """Analyze the conversation to identify speaker roles"""
     try:
         client = openai.OpenAI(
-            api_key="sk-uwdHrdHO6TE7Hnj1azmb9g",
+            api_key="sk-bRi4jzJTrkmv4rdGUCAwsw",
             base_url="https://model-gateway.public.beta.myninja.ai"
         )
         
