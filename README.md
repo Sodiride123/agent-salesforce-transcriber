@@ -1,218 +1,170 @@
 # SalesIQ - Sales Call Analysis Platform
 
-A comprehensive web application for analyzing sales calls with AI-powered insights, integrated with Salesforce.
+![SalesIQ Cover](static/images/salesiq-cover.png)
 
-## 🚀 Features
+## Overview
 
-### 1. **Chat Assistant (Landing Page)**
-- Interactive AI chat interface for sales analysis
-- Custom chibi 3D avatar representing SalesIQ assistant
-- Upload MP3/WAV/M4A/OGG audio files directly in chat
-- Real-time conversation with SalesIQ assistant
-- Automatic audio processing and report generation
+SalesIQ is an intelligent sales call transcription and analysis platform that transforms your sales conversations into actionable insights. Upload audio recordings of your sales calls, and our AI-powered system automatically transcribes the conversation, identifies key discussion points, extracts customer needs, and generates comprehensive action items. The platform seamlessly integrates with Salesforce, allowing you to instantly update account records with valuable customer intelligence gathered from each call. With speaker diarization capabilities, SalesIQ distinguishes between different speakers in the conversation, providing clear attribution for who said what during your sales interactions.
 
-### 2. **Reports Section**
-- View all generated sales call reports
-- Detailed analysis including:
-  - Full transcription of sales calls
-  - Key discussion points
-  - Sentiment analysis
-  - Action items and next steps
-  - Customer needs identification
-- Delete unwanted reports
-- Modal view for detailed report inspection
+Built for modern sales teams, SalesIQ eliminates the tedious task of manual note-taking and CRM updates, enabling sales professionals to focus on what they do best—building relationships and closing deals. The platform's intuitive interface displays detailed call summaries, sentiment analysis, and next steps recommendations, while the direct Salesforce integration ensures that all customer insights are immediately available to your entire team. Whether you're conducting discovery calls, product demos, or follow-up meetings, SalesIQ captures every important detail and transforms your sales conversations into a strategic asset that drives revenue growth and improves customer relationships.
 
-### 3. **Media Library**
-- Central repository for all uploaded audio files
-- File metadata (size, upload date)
-- Easy file management and deletion
-- Organized storage system
+## 🚀 Key Features
 
-### 4. **Salesforce Integration**
-- Connected to Salesforce MCP
-- Access to Accounts, Opportunities, Contacts, Leads, Cases, and Campaigns
-- Real-time data synchronization
-- Available API endpoints for Salesforce operations
+- 🎙️ **Automatic Transcription** - Convert sales call recordings to text with high accuracy
+- 👥 **Speaker Diarization** - Identify and separate different speakers in the conversation
+- 🧠 **AI-Powered Analysis** - Extract key points, customer needs, and action items automatically
+- 📊 **Call Summaries** - Get concise overviews of lengthy sales conversations
+- 🔗 **Salesforce Integration** - Update account records directly from call insights
+- 📝 **Action Items** - Never miss a follow-up with automatically generated tasks
+- 💡 **Customer Needs Identification** - Understand what your customers truly want
+- 🎯 **Next Steps Recommendations** - Get AI-suggested actions to move deals forward
+- 📈 **Sales Intelligence** - Build a knowledge base of customer interactions
+- ⚡ **Fast Processing** - Get results in minutes, not hours
 
-## 🎯 Application Access
+## 🎯 Use Cases
 
-**Live Application URL:** https://salesiq-000yl.app.super.betamyninja.ai
+- **Sales Discovery Calls** - Capture requirements and pain points
+- **Product Demonstrations** - Document feature discussions and objections
+- **Customer Check-ins** - Track relationship progress and satisfaction
+- **Negotiation Meetings** - Record terms, conditions, and agreements
+- **Team Training** - Review and learn from successful sales calls
+- **CRM Enrichment** - Keep Salesforce records up-to-date automatically
 
-## 📋 How to Use
+## 🛠️ Technology Stack
 
-### Uploading and Analyzing Sales Calls
+- **Backend**: Python 3.11, Flask
+- **AI/ML**: OpenAI API for transcription and analysis
+- **CRM Integration**: Salesforce MCP (Model Context Protocol)
+- **Frontend**: Vanilla JavaScript, HTML5, CSS3
+- **Audio Processing**: FFmpeg, Pydub
+- **Document Processing**: Poppler, wkhtmltopdf
 
-1. **Navigate to Chat Assistant** (default landing page)
-2. **Upload Audio File:**
-   - Click the "📎 Upload Sales Call Audio" button
-   - Select your MP3, WAV, M4A, or OGG file
-   - Click "Send" to process
-3. **Wait for Processing:**
-   - The system will transcribe your audio
-   - AI will analyze the conversation
-   - A comprehensive report will be generated
-4. **View Results:**
-   - Check the "Reports" section to see your analysis
-   - Click on any report to view detailed insights
+## 📋 Prerequisites
 
-### Viewing Reports
+- Python 3.11 or higher
+- OpenAI API key
+- Salesforce account with MCP configured
+- FFmpeg installed on system
 
-1. Navigate to the **Reports** tab
-2. Browse all generated reports
-3. Click "View Details" to see full analysis
-4. Review:
-   - Summary and key points
-   - Sentiment analysis
-   - Action items
-   - Customer needs
-   - Full transcription
+## 🚀 Getting Started
 
-### Managing Media Files
+### Installation
 
-1. Navigate to the **Media Library** tab
-2. View all uploaded audio files
-3. Check file sizes and upload dates
-4. Delete files as needed
+1. Clone the repository:
+```bash
+git clone https://github.com/NinjaTech-AI/agent-salesforce-transcriber.git
+cd agent-salesforce-transcriber
+```
 
-## 🔧 Technical Architecture
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-### Backend (Flask)
-- **Port:** 9000
-- **Framework:** Flask 3.0.0
-- **CORS:** Enabled for cross-origin requests
-- **File Upload:** Max 25MB per file
+3. Configure your API key in the application files:
+   - Update `app.py`, `diarization_app.py`, and `real_transcribe.py` with your OpenAI API key
 
-### API Endpoints
+4. Ensure Salesforce MCP is running:
+```bash
+mcp-tools services
+# Should show: salesforce: http://localhost:9082/mcp
+```
 
-#### Chat
-- `POST /api/chat` - Send messages to SalesIQ assistant
+### Running the Application
 
-#### Audio Processing
-- `POST /api/upload-audio` - Upload and process audio files
+```bash
+python app.py
+```
 
-#### Reports
-- `GET /api/reports` - List all reports
-- `GET /api/reports/<report_id>` - Get specific report
-- `DELETE /api/reports/<report_id>` - Delete report
+The application will be available at `http://localhost:9000`
 
-#### Media Library
-- `GET /api/media` - List all media files
-- `DELETE /api/media/<filename>` - Delete media file
+## 📖 Usage
 
-#### Salesforce Integration
-- `GET /api/salesforce/accounts` - Get Salesforce accounts
-- `GET /api/salesforce/opportunities` - Get Salesforce opportunities
+1. **Upload Audio**: Click "Upload Audio" and select your sales call recording
+2. **Transcribe**: The system automatically transcribes and analyzes the call
+3. **Review Analysis**: View the call summary, key points, customer needs, and action items
+4. **Select Account**: Choose the relevant Salesforce account from the dropdown
+5. **Update Salesforce**: Click "Update Account" to save customer insights to Salesforce
 
-### Frontend
-- **HTML5** with semantic structure
-- **CSS3** with modern gradients and animations
-- **Vanilla JavaScript** for interactivity
-- **Responsive Design** for all screen sizes
+## 🔧 Configuration
 
-## 🗂️ Project Structure
+### API Keys
+
+Update the following files with your OpenAI API key:
+- `app.py`
+- `diarization_app.py`
+- `real_transcribe.py`
+
+### Salesforce Integration
+
+The application uses Salesforce MCP for CRM integration. Ensure your MCP server is configured and running on `localhost:9082`.
+
+## 📁 Project Structure
 
 ```
-/workspace/
-├── app.py                      # Flask backend server
-├── index.html                  # Main HTML file
-├── requirements.txt            # Python dependencies
+agent-salesforce-transcriber/
+├── app.py                          # Main Flask application
+├── diarization_app.py              # Speaker diarization logic
+├── real_transcribe.py              # Transcription processing
 ├── static/
 │   ├── css/
-│   │   └── styles.css         # Application styling
-│   └── js/
-│       └── app.js             # Frontend JavaScript
-├── uploads/                    # Temporary upload directory
-├── reports/                    # Generated reports storage
-└── media_library/             # Permanent audio file storage
+│   │   └── styles.css             # Application styles
+│   ├── js/
+│   │   └── app.js                 # Frontend JavaScript
+│   └── images/
+│       └── salesiq-cover.png      # Cover image
+├── templates/
+│   └── index.html                 # Main HTML template
+├── media_library/                  # Uploaded audio files
+├── reports/                        # Generated analysis reports
+├── requirements.txt                # Python dependencies
+├── APPLICATION_DESCRIPTION.md      # Detailed description
+├── MEETING_LOGGING.md             # Meeting logging documentation
+└── README.md                       # This file
 ```
 
-## 🔌 Salesforce MCP Integration
+## 🐛 Troubleshooting
 
-The application is connected to Salesforce MCP with access to:
+### Common Issues
 
-- **Accounts:** Create, read, update, delete
-- **Contacts:** Full CRUD operations
-- **Opportunities:** Sales pipeline management
-- **Leads:** Lead tracking and conversion
-- **Cases:** Customer support cases
-- **Campaigns:** Marketing campaign management
-- **Attachments:** File management
-- **Custom Queries:** SOQL query execution
-
-### Using Salesforce Features
-
-To integrate Salesforce data into your sales analysis:
-
-```javascript
-// Example: Fetch accounts
-fetch('/api/salesforce/accounts?limit=10')
-  .then(response => response.json())
-  .then(data => console.log(data));
-
-// Example: Fetch opportunities
-fetch('/api/salesforce/opportunities?limit=10')
-  .then(response => response.json())
-  .then(data => console.log(data));
+**Port Already in Use**
+```bash
+# Kill process on port 9000
+fuser -k 9000/tcp
 ```
 
-## 🎨 Design Features
+**Salesforce MCP Not Connected**
+```bash
+# Check MCP status
+mcp-tools services
 
-- **Modern UI:** Clean, professional interface with gradient accents
-- **Intuitive Navigation:** Left sidebar with clear section indicators
-- **Responsive Layout:** Works on desktop and tablet devices
-- **Smooth Animations:** Hover effects and transitions
-- **Color Scheme:** Blue gradient theme with white content areas
-- **Typography:** System fonts for optimal readability
+# Test Salesforce connection
+mcp-tools call salesforce_get_accounts '{"limit": 1}'
+```
 
-## 🔒 Security Features
+**Transcription Errors**
+- Verify OpenAI API key is correct
+- Check audio file format (supported: mp3, mp4, wav, webm)
+- Ensure file size is under 25MB
 
-- File type validation (only audio files accepted)
-- File size limits (25MB maximum)
-- Secure filename handling
-- CORS protection
-- Input sanitization
+## 🤝 Contributing
 
-## 📊 Report Analysis Components
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-Each generated report includes:
+## 📄 License
 
-1. **Summary:** High-level overview of the call
-2. **Key Points:** Important discussion topics
-3. **Sentiment Analysis:** Overall tone and customer mood
-4. **Action Items:** Tasks to complete post-call
-5. **Customer Needs:** Identified requirements and pain points
-6. **Next Steps:** Recommended follow-up actions
-7. **Full Transcription:** Complete text of the conversation
+This project is proprietary software developed by NinjaTech AI.
 
-## 🚀 Future Enhancements
+## 🔗 Links
 
-Potential features for future development:
-- Real-time audio transcription
-- Advanced AI analysis with GPT-4
-- Salesforce automatic data entry from calls
-- Multi-language support
-- Team collaboration features
-- Analytics dashboard
-- Export reports to PDF
-- Email notifications
-- Calendar integration
+- **Live Demo**: https://00104.app.super.betamyninja.ai
+- **GitHub Repository**: https://github.com/NinjaTech-AI/agent-salesforce-transcriber
+- **NinjaTech AI**: https://www.ninjatech.ai
 
-## 💡 Tips for Best Results
+## 📞 Support
 
-1. **Audio Quality:** Use clear recordings for better transcription
-2. **File Format:** MP3 is recommended for best compatibility
-3. **File Size:** Keep files under 25MB for optimal processing
-4. **Regular Cleanup:** Delete old reports and media to save space
-5. **Salesforce Sync:** Regularly check Salesforce integration status
-
-## 🆘 Support
-
-For issues or questions:
-1. Check the chat assistant for help
-2. Review this documentation
-3. Verify Salesforce MCP connection status
-4. Check browser console for errors
+For support, please contact the NinjaTech AI team or open an issue on GitHub.
 
 ---
 
-**Built with ❤️ using Flask, JavaScript, and Salesforce MCP**
+Built with ❤️ by [NinjaTech AI](https://www.ninjatech.ai)
