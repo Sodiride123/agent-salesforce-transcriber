@@ -9,6 +9,20 @@ import sys
 import json
 import openai
 
+def get_api_credentials():
+    """Get API credentials from Claude settings file"""
+    try:
+        settings_path = '/root/.claude/settings.json'
+        with open(settings_path, 'r') as f:
+            settings = json.load(f)
+            api_key = settings.get('env', {}).get('ANTHROPIC_AUTH_TOKEN', '')
+            base_url = settings.get('env', {}).get('ANTHROPIC_BASE_URL', 'https://model-gateway.public.beta.myninja.ai')
+            return api_key, base_url
+    except Exception as e:
+        print(f"Warning: Could not read settings file: {e}", file=sys.stderr)
+        # Fallback to environment variables or defaults
+        return os.environ.get('ANTHROPIC_AUTH_TOKEN', ''), 'https://model-gateway.public.beta.myninja.ai'
+
 def transcribe_audio_real(file_path):
     """
     Transcribe audio using SuperNinja's transcription service
@@ -54,10 +68,13 @@ def transcribe_audio_real(file_path):
         print(f"[TRANSCRIBE] Processing: {file_name}", file=sys.stderr)
         print(f"[TRANSCRIBE] Size: {file_size / 1024:.2f} KB", file=sys.stderr)
         
+        # Get API credentials from settings
+        api_key, base_url = get_api_credentials()
+        
         # Initialize OpenAI client with SuperNinja endpoint
         client = openai.OpenAI(
-            api_key="sk-bRi4jzJTrkmv4rdGUCAwsw",
-            base_url="https://model-gateway.public.beta.myninja.ai"
+            api_key=api_key,
+            base_url=base_url
         )
         
         # Open the audio file

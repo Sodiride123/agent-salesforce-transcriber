@@ -62,13 +62,30 @@ def call_mcp_tool(tool_name, args_json):
 
 # transcribe_audio_file is now imported from audio_transcriber module
 
+def get_api_credentials():
+    """Get API credentials from Claude settings file"""
+    try:
+        settings_path = '/root/.claude/settings.json'
+        with open(settings_path, 'r') as f:
+            settings = json.load(f)
+            api_key = settings.get('env', {}).get('ANTHROPIC_AUTH_TOKEN', '')
+            base_url = settings.get('env', {}).get('ANTHROPIC_BASE_URL', 'https://model-gateway.public.beta.myninja.ai')
+            return api_key, base_url
+    except Exception as e:
+        print(f"Warning: Could not read settings file: {e}", file=sys.stderr)
+        # Fallback to environment variables or defaults
+        return os.environ.get('ANTHROPIC_AUTH_TOKEN', ''), 'https://model-gateway.public.beta.myninja.ai'
+
 def analyze_sales_call(transcription, filename):
     """Analyze sales call transcription and generate insights using AI"""
     try:
+        # Get API credentials from settings
+        api_key, base_url = get_api_credentials()
+        
         # Use SuperNinja AI to analyze the transcription
         client = openai.OpenAI(
-            api_key="sk-bRi4jzJTrkmv4rdGUCAwsw",
-            base_url="https://model-gateway.public.beta.myninja.ai"
+            api_key=api_key,
+            base_url=base_url
         )
         
         prompt = f"""Analyze this sales call transcription and provide detailed insights.
