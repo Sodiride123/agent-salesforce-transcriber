@@ -159,8 +159,41 @@ function addMessageToChat(sender, text) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
+function showTypingIndicator() {
+    const messagesContainer = document.getElementById('chatMessages');
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'message assistant typing-indicator';
+    typingDiv.id = 'typingIndicator';
+    
+    typingDiv.innerHTML = `
+        <div class="message-avatar">
+            <img src="/static/images/salesiq-avatar.png" alt="SalesIQ">
+        </div>
+        <div class="message-content">
+            <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(typingDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    const typingIndicator = document.getElementById('typingIndicator');
+    if (typingIndicator) {
+        typingIndicator.remove();
+    }
+}
+
 async function sendChatMessage(message) {
     try {
+        // Show typing indicator
+        showTypingIndicator();
+        
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
@@ -174,6 +207,9 @@ async function sendChatMessage(message) {
         
         const data = await response.json();
         
+        // Hide typing indicator
+        hideTypingIndicator();
+        
         // Update context indicator if provided
         if (data.num_reports !== undefined) {
             updateContextIndicator(data.num_reports);
@@ -182,6 +218,7 @@ async function sendChatMessage(message) {
         addMessageToChat('assistant', data.message);
     } catch (error) {
         console.error('Error sending message:', error);
+        hideTypingIndicator();
         addMessageToChat('assistant', 'Sorry, I encountered an error. Please try again.');
     }
 }
@@ -192,7 +229,9 @@ async function uploadAudioFile(file) {
     formData.append('session_id', state.sessionId);
     
     addMessageToChat('user', `Uploading audio file: ${file.name}`);
-    addMessageToChat('assistant', 'Processing your audio file... This may take a moment.');
+    
+    // Show typing indicator for processing
+    showTypingIndicator();
     
     try {
         const response = await fetch('/api/upload-audio', {
@@ -201,6 +240,9 @@ async function uploadAudioFile(file) {
         });
         
         const data = await response.json();
+        
+        // Hide typing indicator
+        hideTypingIndicator();
         
         if (data.success) {
             addMessageToChat('assistant', `✅ Success! Audio processed successfully!\n\n${data.message}\n\nYou now have ${data.num_reports_in_context} call(s) in context. Ask me anything about the call!`);
@@ -217,6 +259,7 @@ async function uploadAudioFile(file) {
         }
     } catch (error) {
         console.error('Error uploading audio:', error);
+        hideTypingIndicator();
         addMessageToChat('assistant', 'Error: Failed to upload audio file. Please try again.');
     }
 }
