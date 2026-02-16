@@ -135,9 +135,24 @@ function addMessageToChat(sender, text) {
         ? 'U' 
         : '<img src="/static/images/salesiq-avatar.png" alt="SalesIQ">';
     
+    // For assistant messages, render markdown. For user messages, escape HTML.
+    let content;
+    if (sender === 'assistant' && typeof marked !== 'undefined') {
+        // Configure marked for better formatting
+        marked.setOptions({
+            breaks: true,  // Convert \n to <br>
+            gfm: true,     // GitHub Flavored Markdown
+            headerIds: false,
+            mangle: false
+        });
+        content = marked.parse(text);
+    } else {
+        content = escapeHtml(text).replace(/\n/g, '<br>');
+    }
+    
     messageDiv.innerHTML = `
         <div class="message-avatar">${avatar}</div>
-        <div class="message-content">${escapeHtml(text)}</div>
+        <div class="message-content">${content}</div>
     `;
     
     messagesContainer.appendChild(messageDiv);
