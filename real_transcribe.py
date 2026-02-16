@@ -82,9 +82,9 @@ def transcribe_audio_real(file_path):
             print(f"[TRANSCRIBE] Sending to transcription service...", file=sys.stderr)
             
             # Make the transcription request
-            # Note: The superninja-transcribe model uses 'text' format
+            # Note: Using OpenAI GPT-4o transcribe model
             response = client.audio.transcriptions.create(
-                model="superninja-transcribe",
+                model="openai/openai/gpt-4o-transcribe",
                 file=audio_file,
                 response_format="text"
             )

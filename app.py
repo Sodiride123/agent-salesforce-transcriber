@@ -106,7 +106,7 @@ Provide a comprehensive analysis in the following JSON format:
 Be specific and base everything on the actual content of the transcription."""
 
         response = client.chat.completions.create(
-            model="superninja-complex",
+            model="ninja-cline",
             messages=[
                 {"role": "system", "content": "You are an expert sales call analyst. Analyze conversations and extract actionable insights."},
                 {"role": "user", "content": prompt}
