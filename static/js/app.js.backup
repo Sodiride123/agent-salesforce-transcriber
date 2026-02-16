@@ -3,40 +3,15 @@ const state = {
     currentPage: 'chat',
     reports: [],
     mediaFiles: [],
-    selectedFile: null,
-    sessionId: null
+    selectedFile: null
 };
-
-// Generate or retrieve session ID
-function getSessionId() {
-    let sessionId = localStorage.getItem('salesiq_session_id');
-    if (!sessionId) {
-        sessionId = generateUUID();
-        localStorage.setItem('salesiq_session_id', sessionId);
-        console.log('[SESSION] Created new session:', sessionId);
-    } else {
-        console.log('[SESSION] Retrieved existing session:', sessionId);
-    }
-    return sessionId;
-}
-
-// Generate UUID for session ID
-function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r &amp; 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    state.sessionId = getSessionId();
     initializeNavigation();
     initializeChat();
     loadReports();
     loadMediaLibrary();
-    updateContextIndicator(0);
 });
 
 // Navigation
@@ -151,19 +126,10 @@ async function sendChatMessage(message) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
-                message: message,
-                session_id: state.sessionId
-            })
+            body: JSON.stringify({ message })
         });
         
         const data = await response.json();
-        
-        // Update context indicator if provided
-        if (data.num_reports !== undefined) {
-            updateContextIndicator(data.num_reports);
-        }
-        
         addMessageToChat('assistant', data.message);
     } catch (error) {
         console.error('Error sending message:', error);
@@ -174,7 +140,6 @@ async function sendChatMessage(message) {
 async function uploadAudioFile(file) {
     const formData = new FormData();
     formData.append('audio', file);
-    formData.append('session_id', state.sessionId);
     
     addMessageToChat('user', `Uploading audio file: ${file.name}`);
     addMessageToChat('assistant', 'Processing your audio file... This may take a moment.');
@@ -188,10 +153,7 @@ async function uploadAudioFile(file) {
         const data = await response.json();
         
         if (data.success) {
-            addMessageToChat('assistant', `✅ Success! Audio processed successfully!\n\n${data.message}\n\nYou now have ${data.num_reports_in_context} call(s) in context. Ask me anything about the call!`);
-            
-            // Update context indicator
-            updateContextIndicator(data.num_reports_in_context);
+            addMessageToChat('assistant', `Success! Audio processed successfully! I've created a detailed report with transcription and analysis. You can view it in the Reports section.`);
             
             // Reload reports if on reports page
             if (state.currentPage === 'reports') {
@@ -692,31 +654,6 @@ async function updateAccountFromReport(reportId) {
 }
 
 
-
-// Context Indicator
-function updateContextIndicator(numReports) {
-    const indicator = document.getElementById('contextIndicator');
-    if (!indicator) {
-        // Create indicator if it doesn't exist
-        const chatHeader = document.querySelector('.chat-header');
-        if (chatHeader) {
-            const indicatorDiv = document.createElement('div');
-            indicatorDiv.id = 'contextIndicator';
-            indicatorDiv.className = 'context-indicator';
-            chatHeader.appendChild(indicatorDiv);
-        }
-    }
-    
-    const indicatorElement = document.getElementById('contextIndicator');
-    if (indicatorElement) {
-        if (numReports > 0) {
-            indicatorElement.innerHTML = `📄 ${numReports} call${numReports > 1 ? 's' : ''} in context`;
-            indicatorElement.style.display = 'block';
-        } else {
-            indicatorElement.style.display = 'none';
-        }
-    }
-}
 
 // Close modal when clicking outside
 document.addEventListener('click', (e) => {

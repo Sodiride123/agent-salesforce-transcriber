@@ -1,59 +1,42 @@
-# Todo: Add Salesforce Meeting Logging Functionality ✅ COMPLETED
+# SalesIQ Context-Aware Chat Implementation
 
-## 1. Research & Planning ✅
-- [x] Check Salesforce REST API documentation for Event creation
-- [x] Identify required fields for Event creation
-- [x] Determine authentication method (use existing Salesforce connection)
-- [x] Plan API endpoint structure
-- [x] Identified MCP limitation: No Event creation tool available
-- [x] Designed workaround using Account Description field
+## Phase 1: Session Management
+- [x] Add session data structure to app.py
+- [x] Create Session class
+- [x] Add session storage dictionary
+- [ ] Test session creation and retrieval
 
-## 2. Implementation ✅
-- [x] Add Salesforce REST API client function in app.py
-- [x] Create /api/salesforce/create-event endpoint (already exists, needs implementation)
-- [x] Implement meeting notes storage (using Account Description as workaround)
-- [x] Link meeting notes to Accounts
-- [x] Handle meeting date/time from transcription metadata
-- [x] Format meeting notes with proper structure
-- [x] Append new meetings to existing description
+## Phase 2: Upload Flow Enhancement
+- [x] Modify /api/upload-audio to accept session_id
+- [x] Link reports to sessions after transcription
+- [x] Update response to indicate context is ready
+- [ ] Test upload with session linking
 
-## 3. Frontend Integration ✅
-- [x] Update static/js/app.js to add "Log Meeting" button
-- [x] Add UI for Event creation with meeting notes
-- [x] Display success/error messages
-- [x] Pre-populate meeting subject and notes from call analysis
-- [x] Add createMeetingEvent() JavaScript function
+## Phase 3: Context Building
+- [x] Implement build_context_from_reports() function
+- [x] Implement ask_claude_with_context() function
+- [ ] Test context building with single report
+- [ ] Test context building with multiple reports
+- [ ] Verify context format is correct
 
-## 4. Testing ✅
-- [x] Test meeting notes storage with sample data
-- [x] Verify meeting notes appear in Salesforce Account Description
-- [x] Test Account linking
-- [x] Verify meeting notes are properly formatted and stored
-- [x] Confirmed API endpoint works correctly
-- [x] Verified data appears in Salesforce
+## Phase 4: Chat Endpoint Rewrite
+- [x] Rewrite /api/chat endpoint with session awareness
+- [x] Add conversation history tracking
+- [x] Implement ask_claude_with_context() function
+- [ ] Test chat with context
 
-## 5. Documentation ✅
-- [x] Document meeting logging feature
-- [x] Document API endpoint usage
-- [x] Note limitations and workarounds
-- [x] Create comprehensive MEETING_LOGGING.md guide
-- [x] Document future enhancement options
+## Phase 5: Frontend Updates
+- [x] Add session ID generation in JavaScript
+- [x] Update uploadAudioFile to send session_id
+- [x] Update sendChatMessage to send session_id
+- [x] Add context indicator UI element
+- [x] Add CSS styling for context indicator
+- [ ] Test frontend integration
 
-## Summary
-
-Successfully implemented meeting logging functionality for the Salesforce Transcriber application. Due to Salesforce MCP limitations (no Event creation tool), implemented a practical workaround that stores meeting notes in the Account Description field with proper formatting and chronological ordering.
-
-**Key Features:**
-- ✅ Log meeting information from sales calls
-- ✅ Store call summaries, key points, customer needs, and action items
-- ✅ Chronological meeting history on Account records
-- ✅ User-friendly UI with pre-populated data
-- ✅ Full API endpoint for programmatic access
-- ✅ Robust error handling for undefined values
-
-**Bug Fixes:**
-- ✅ Fixed TypeError when report.analysis fields are undefined
-- ✅ Added safety checks for all array operations
-- ✅ Added fallback values for missing data
-
-**Application URL:** https://00104.app.super.betamyninja.ai
+## Phase 6: Testing & Verification
+- [x] Test complete flow: upload → transcribe → ask questions
+- [x] Test conversation history and follow-up questions
+- [ ] Test multiple file context
+- [x] Verify error handling
+- [x] Test edge cases (no context, invalid session, etc.)
+- [ ] Manual UI testing with real audio upload

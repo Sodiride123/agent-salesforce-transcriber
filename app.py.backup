@@ -28,45 +28,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(REPORTS_FOLDER, exist_ok=True)
 os.makedirs(MEDIA_LIBRARY_FOLDER, exist_ok=True)
 
-# Session Management
-class Session:
-    """Manages user session with conversation history and active reports"""
-    def __init__(self, session_id):
-        self.session_id = session_id
-        self.active_reports = []  # List of report IDs in context
-        self.conversation_history = []  # Chat history
-        self.created_at = datetime.now()
-        self.last_activity = datetime.now()
-    
-    def add_report(self, report_id):
-        """Add a report to the active context"""
-        if report_id not in self.active_reports:
-            self.active_reports.append(report_id)
-        self.last_activity = datetime.now()
-    
-    def add_message(self, role, content):
-        """Add a message to conversation history"""
-        self.conversation_history.append({
-            "role": role,
-            "content": content,
-            "timestamp": datetime.now().isoformat()
-        })
-        self.last_activity = datetime.now()
-    
-    def get_context_summary(self):
-        """Get summary of active context"""
-        return {
-            "session_id": self.session_id,
-            "num_reports": len(self.active_reports),
-            "report_ids": self.active_reports,
-            "conversation_length": len(self.conversation_history),
-            "created_at": self.created_at.isoformat(),
-            "last_activity": self.last_activity.isoformat()
-        }
-
-# Global session storage
-sessions = {}
-
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -114,99 +75,6 @@ def get_api_credentials():
         print(f"Warning: Could not read settings file: {e}", file=sys.stderr)
         # Fallback to environment variables or defaults
         return os.environ.get('ANTHROPIC_AUTH_TOKEN', ''), 'https://model-gateway.public.beta.myninja.ai'
-
-def build_context_from_reports(report_ids):
-    """
-    Builds a comprehensive context string from report IDs
-    """
-    context_parts = []
-    
-    for report_id in report_ids:
-        report_path = os.path.join(REPORTS_FOLDER, f"{report_id}.json")
-        
-        if os.path.exists(report_path):
-            with open(report_path, 'r') as f:
-                report = json.load(f)
-                
-                # Build structured context
-                context_part = f"""
---- Call: {report['filename']} ---
-Date: {report['created_at']}
-
-TRANSCRIPTION:
-{report['transcription']}
-
-ANALYSIS:
-Summary: {report['analysis']['summary']}
-Key Points: {', '.join(report['analysis']['key_points'])}
-Sentiment: {report['analysis']['sentiment']}
-Customer Needs: {', '.join(report['analysis']['customer_needs'])}
-Action Items: {', '.join(report['analysis']['action_items'])}
-Next Steps: {report['analysis']['next_steps']}
----
-"""
-                context_parts.append(context_part)
-    
-    return "\n\n".join(context_parts)
-
-def ask_claude_with_context(question, context, history):
-    """
-    Ask Claude a question with transcription context
-    """
-    try:
-        # Get API credentials
-        api_key, base_url = get_api_credentials()
-        
-        client = openai.OpenAI(
-            api_key=api_key,
-            base_url=base_url
-        )
-        
-        # Build system prompt with context
-        system_prompt = f"""You are SalesIQ, an intelligent sales assistant with access to call transcriptions.
-
-You have access to the following call transcription(s):
-
-{context}
-
-Your role is to:
-- Answer questions about the call(s) accurately based on the transcription
-- Extract specific information when asked
-- Provide insights and analysis
-- Reference specific parts of the conversation when relevant
-- Be concise but thorough
-- Use bullet points and formatting for clarity
-
-If a question cannot be answered from the available transcription, say so clearly."""
-
-        # Build messages array with history
-        messages = [
-            {"role": "system", "content": system_prompt}
-        ]
-        
-        # Add conversation history (last 10 messages to avoid token limits)
-        for msg in history[-10:]:
-            messages.append({
-                "role": msg["role"],
-                "content": msg["content"]
-            })
-        
-        # Call Claude
-        print(f"[CLAUDE] Sending question to Claude with {len(context)} chars of context", file=sys.stderr)
-        response = client.chat.completions.create(
-            model="ninja-cline-complex",
-            messages=messages,
-            temperature=0.3,
-            max_tokens=1500
-        )
-        
-        answer = response.choices[0].message.content
-        print(f"[CLAUDE] Received response: {len(answer)} chars", file=sys.stderr)
-        return answer
-        
-    except Exception as e:
-        print(f"[ERROR] Claude API error: {str(e)}", file=sys.stderr)
-        return f"I apologize, but I encountered an error processing your question: {str(e)}"
 
 def analyze_sales_call(transcription, filename):
     """Analyze sales call transcription and generate insights using AI"""
@@ -290,79 +158,17 @@ def send_static(path):
 # Chat endpoints
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    """Handle chat messages with SalesIQ assistant - Context-aware with Claude AI"""
+    """Handle chat messages with SalesIQ assistant"""
     data = request.json
     message = data.get('message', '')
-    session_id = data.get('session_id')
     
-    # Validate inputs
-    if not message:
-        return jsonify({"error": "No message provided"}), 400
+    # Simple response logic - in production, this would integrate with an AI model
+    response = {
+        "message": f"SalesIQ: I received your message: '{message}'. How can I help you with your sales analysis today?",
+        "timestamp": datetime.now().isoformat()
+    }
     
-    if not session_id:
-        return jsonify({
-            "message": "Please upload an audio file first to start asking questions.",
-            "has_context": False,
-            "error": "No session_id provided"
-        }), 400
-    
-    # Get or create session
-    if session_id not in sessions:
-        sessions[session_id] = Session(session_id)
-        print(f"[SESSION] Created new session for chat: {session_id}", file=sys.stderr)
-    
-    session = sessions[session_id]
-    
-    # Check if there are active reports
-    if not session.active_reports:
-        return jsonify({
-            "message": "I don't have any call transcriptions in context yet. Please upload an audio file first, and then I'll be able to answer questions about it!",
-            "has_context": False,
-            "num_reports": 0
-        })
-    
-    # Add user message to history
-    session.add_message("user", message)
-    print(f"[CHAT] User question: {message}", file=sys.stderr)
-    print(f"[CHAT] Session has {len(session.active_reports)} report(s) in context", file=sys.stderr)
-    
-    # Build context from active reports
-    try:
-        context = build_context_from_reports(session.active_reports)
-        print(f"[CHAT] Built context: {len(context)} characters", file=sys.stderr)
-    except Exception as e:
-        print(f"[ERROR] Failed to build context: {str(e)}", file=sys.stderr)
-        return jsonify({
-            "message": "I encountered an error accessing the call transcriptions. Please try again.",
-            "error": str(e),
-            "has_context": True
-        }), 500
-    
-    # Get response from Claude with context
-    try:
-        response_text = ask_claude_with_context(
-            question=message,
-            context=context,
-            history=session.conversation_history
-        )
-        
-        # Add assistant response to history
-        session.add_message("assistant", response_text)
-        
-        return jsonify({
-            "message": response_text,
-            "has_context": True,
-            "num_reports": len(session.active_reports),
-            "timestamp": datetime.now().isoformat()
-        })
-        
-    except Exception as e:
-        print(f"[ERROR] Chat error: {str(e)}", file=sys.stderr)
-        return jsonify({
-            "message": "I apologize, but I encountered an error processing your question. Please try again.",
-            "error": str(e),
-            "has_context": True
-        }), 500
+    return jsonify(response)
 
 # Audio upload and processing
 @app.route('/api/upload-audio', methods=['POST'])
@@ -374,16 +180,6 @@ def upload_audio():
     file = request.files['audio']
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
-    
-    # Get session_id from form data
-    session_id = request.form.get('session_id')
-    if not session_id:
-        return jsonify({"error": "No session_id provided"}), 400
-    
-    # Create session if it doesn't exist
-    if session_id not in sessions:
-        sessions[session_id] = Session(session_id)
-        print(f"[SESSION] Created new session: {session_id}", file=sys.stderr)
     
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
@@ -444,18 +240,10 @@ def upload_audio():
             with open(report_path, 'w') as f:
                 json.dump(report, f, indent=2)
             
-            # Link report to session
-            session = sessions[session_id]
-            session.add_report(report_id)
-            print(f"[SESSION] Added report {report_id} to session {session_id}", file=sys.stderr)
-            print(f"[SESSION] Session now has {len(session.active_reports)} report(s)", file=sys.stderr)
-            
             return jsonify({
                 "success": True,
                 "report_id": report_id,
-                "message": "Audio processed successfully. You can now ask questions about this call!",
-                "context_set": True,
-                "num_reports_in_context": len(session.active_reports)
+                "message": "Audio processed successfully"
             })
         else:
             return jsonify({
