@@ -569,63 +569,71 @@ def get_salesforce_opportunities():
 @app.route('/api/salesforce/create-tasks', methods=['POST'])
 def create_salesforce_tasks():
     """Create tasks in Salesforce from action items"""
+    import requests as http_requests
+
     data = request.json
     action_items = data.get('action_items', [])
     account_id = data.get('account_id')
     contact_id = data.get('contact_id')
-    
+
+    # Get Salesforce credentials from /dev/shm/mcp-token
+    # File format: Salesforce={"access_token": "...", "instance_url": "..."}
+    try:
+        with open('/dev/shm/mcp-token', 'r') as f:
+            token_line = f.read().strip()
+        sf_creds = json.loads(token_line.split('=', 1)[1])
+        access_token = sf_creds['access_token']
+        instance_url = sf_creds['instance_url']
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Could not read Salesforce credentials: {e}"}), 500
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
     created_tasks = []
     errors = []
-    
+    activity_date = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
+
     for item in action_items:
         try:
-            # Use Salesforce query tool to insert tasks
-            # Build the SOQL INSERT equivalent using REST API pattern
-            whatid_field = 'WhatId,' if account_id else ''
-            whoid_field = 'WhoId,' if contact_id else ''
-            whatid_value = f"'{account_id}'," if account_id else ''
-            whoid_value = f"'{contact_id}'," if contact_id else ''
-            escaped_item = item.replace("'", "\\'")
-            activity_date = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
-            
-            task_query = f"""
-            INSERT INTO Task (
-                Subject, 
-                Status, 
-                Priority, 
-                ActivityDate,
-                {whatid_field}
-                {whoid_field}
-                Description
-            ) VALUES (
-                '{escaped_item}',
-                'Not Started',
-                'Normal',
-                '{activity_date}',
-                {whatid_value}
-                {whoid_value}
-                'Created from SalesIQ call analysis'
+            task_data = {
+                'Subject': item,
+                'Status': 'Not Started',
+                'Priority': 'Normal',
+                'ActivityDate': activity_date,
+                'Description': 'Created from SalesIQ call analysis'
+            }
+            if account_id:
+                task_data['WhatId'] = account_id
+            if contact_id:
+                task_data['WhoId'] = contact_id
+
+            resp = http_requests.post(
+                f'{instance_url}/services/data/v59.0/sobjects/Task/',
+                headers=headers,
+                json=task_data
             )
-            """
-            
-            # Note: Standard SOQL doesn't support INSERT
-            # This is a simulated response for demonstration
-            # In production, you would use Salesforce REST API or Apex
-            created_tasks.append({
-                "subject": item, 
-                "status": "queued",
-                "account_id": account_id,
-                "note": "Task creation queued - requires Salesforce REST API integration"
-            })
-            
+
+            if resp.status_code == 201:
+                result = resp.json()
+                created_tasks.append({
+                    "subject": item,
+                    "id": result.get('id'),
+                    "status": "created"
+                })
+            else:
+                errors.append({"item": item, "error": resp.json()})
+
         except Exception as e:
             errors.append({"item": item, "error": str(e)})
-    
+
+    success = len(created_tasks) > 0 or len(errors) == 0
     return jsonify({
-        "success": True,
+        "success": success,
         "created_tasks": created_tasks,
-        "errors": errors,
-        "note": "Tasks have been queued. Full integration requires Salesforce REST API setup."
+        "errors": errors
     })
 
 @app.route('/api/salesforce/create-event', methods=['POST'])
