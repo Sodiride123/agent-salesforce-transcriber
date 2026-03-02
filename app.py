@@ -551,6 +551,15 @@ def delete_media(filename):
         return jsonify({"success": True, "message": "Media file deleted"})
     return jsonify({"error": "File not found"}), 404
 
+@app.route('/api/media/<filename>/download', methods=['GET'])
+def download_media(filename):
+    """Download a media file"""
+    safe_filename = secure_filename(filename)
+    file_path = os.path.join(MEDIA_LIBRARY_FOLDER, safe_filename)
+    if os.path.exists(file_path):
+        return send_from_directory(MEDIA_LIBRARY_FOLDER, safe_filename, as_attachment=True)
+    return jsonify({"error": "File not found"}), 404
+
 # Salesforce integration endpoints
 @app.route('/api/salesforce/accounts', methods=['GET'])
 def get_salesforce_accounts():

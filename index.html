@@ -11,8 +11,12 @@
 </head>
 <body>
     <div class="app-container">
+        <!-- Mobile Menu Button -->
+        <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Menu">&#9776;</button>
+        <!-- Mobile Overlay -->
+        <div class="nav-overlay" id="navOverlay" onclick="toggleMobileMenu()"></div>
         <!-- Left Navigation -->
-        <nav class="left-nav">
+        <nav class="left-nav" id="leftNav">
             <div class="nav-header">
                 <div class="nav-header-avatar">
                     <img src="/static/images/salesiq-avatar.png" alt="SalesIQ">
@@ -21,6 +25,14 @@
                     <h1>SalesIQ</h1>
                     <p>Sales Intelligence Platform</p>
                 </div>
+            </div>
+            <div class="nav-new-session">
+                <button class="new-session-btn" onclick="showNewSessionModal()">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px; fill: currentColor;">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    </svg>
+                    New Session
+                </button>
             </div>
             <div class="nav-menu">
                 <div class="nav-item active" data-page="chat">
@@ -131,6 +143,27 @@
             <button class="modal-close" onclick="closeReportModal()">×</button>
             <div id="reportModalBody">
                 <!-- Report details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- New Session Modal -->
+    <div id="newSessionModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <button class="modal-close" onclick="closeNewSessionModal()">&times;</button>
+            <div class="new-session-modal-body">
+                <h2 style="margin-bottom: 8px;">Start New Session</h2>
+                <p style="color: #6b7280; margin-bottom: 20px;">This will clear the current chat history and start fresh.</p>
+
+                <div id="existingFilesSection" style="display: none;">
+                    <h4 style="margin-bottom: 10px;">Use an existing audio file:</h4>
+                    <div id="existingFilesList" class="existing-files-list"></div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="confirmNewSession()" style="flex: 1;">Start Fresh</button>
+                    <button class="btn btn-secondary" onclick="closeNewSessionModal()" style="flex: 1;">Cancel</button>
+                </div>
             </div>
         </div>
     </div>

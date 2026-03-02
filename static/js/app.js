@@ -418,9 +418,7 @@ function showReportModal(report) {
                     <p style="color: #64748b; font-size: 14px; margin-bottom: 10px;">
                         Add customer needs to account notes:
                     </p>
-                    <textarea id="accountNotes" rows="4" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: inherit;">
-${(report.analysis.customer_needs || []).map(need => `• ${need}`).join('\n') || 'No customer needs identified'}
-                    </textarea>
+                    <textarea id="accountNotes" rows="4" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: inherit; box-sizing: border-box; resize: vertical;">${(report.analysis.customer_needs || []).map(need => `• ${need}`).join('\n') || 'No customer needs identified'}</textarea>
                     <button class="btn" onclick="updateAccountFromReport('${report.id}')" style="margin-top: 10px;">
                         Update Account
                     </button>
@@ -445,17 +443,23 @@ function closeReportModal() {
 
 async function deleteReport(reportId) {
     if (!confirm('Are you sure you want to delete this report?')) return;
-    
+
+    // Optimistic UI: immediately remove from DOM and state
+    state.reports = state.reports.filter(r => r.id !== reportId);
+    displayReports(state.reports);
+
     try {
         const response = await fetch(`/api/reports/${reportId}`, {
             method: 'DELETE'
         });
-        
-        if (response.ok) {
+
+        if (!response.ok) {
+            // If failed, reload to restore
             loadReports();
         }
     } catch (error) {
         console.error('Error deleting report:', error);
+        loadReports();
     }
 }
 
@@ -514,17 +518,22 @@ function displayMediaLibrary(mediaFiles) {
 
 async function deleteMedia(filename) {
     if (!confirm('Are you sure you want to delete this media file?')) return;
-    
+
+    // Optimistic UI: immediately remove from DOM and state
+    state.mediaFiles = state.mediaFiles.filter(f => f.filename !== filename);
+    displayMediaLibrary(state.mediaFiles);
+
     try {
         const response = await fetch(`/api/media/${encodeURIComponent(filename)}`, {
             method: 'DELETE'
         });
-        
-        if (response.ok) {
+
+        if (!response.ok) {
             loadMediaLibrary();
         }
     } catch (error) {
         console.error('Error deleting media:', error);
+        loadMediaLibrary();
     }
 }
 
@@ -776,10 +785,161 @@ function updateContextIndicator(numReports) {
     }
 }
 
-// Close modal when clicking outside
+// New Session
+async function showNewSessionModal() {
+    closeMobileMenu();
+
+    const modal = document.getElementById('newSessionModal');
+    const filesSection = document.getElementById('existingFilesSection');
+    const filesList = document.getElementById('existingFilesList');
+
+    // Fetch latest media files
+    try {
+        const response = await fetch('/api/media');
+        const mediaFiles = await response.json();
+
+        if (mediaFiles.length > 0) {
+            filesSection.style.display = 'block';
+            filesList.innerHTML = mediaFiles.map(file => `
+                <label class="existing-file-item" onclick="this.querySelector('input').checked = true; document.querySelectorAll('.existing-file-item').forEach(el => el.classList.remove('selected')); this.classList.add('selected');">
+                    <input type="radio" name="existingFile" value="${escapeHtml(file.filename)}">
+                    <div class="file-details">
+                        <div class="file-name">${escapeHtml(file.filename)}</div>
+                        <div class="file-meta">${formatFileSize(file.size)} &middot; ${formatDate(file.created_at)}</div>
+                    </div>
+                </label>
+            `).join('');
+        } else {
+            filesSection.style.display = 'none';
+            filesList.innerHTML = '';
+        }
+    } catch (error) {
+        console.error('Error loading media files:', error);
+        filesSection.style.display = 'none';
+    }
+
+    modal.classList.add('active');
+}
+
+function closeNewSessionModal() {
+    document.getElementById('newSessionModal').classList.remove('active');
+}
+
+async function confirmNewSession() {
+    // Check if a file was selected
+    const selectedRadio = document.querySelector('input[name="existingFile"]:checked');
+    const selectedFilename = selectedRadio ? selectedRadio.value : null;
+
+    closeNewSessionModal();
+
+    // Generate new session ID
+    const newSessionId = generateUUID();
+    localStorage.setItem('salesiq_session_id', newSessionId);
+    state.sessionId = newSessionId;
+    console.log('[SESSION] Started new session:', newSessionId);
+
+    // Clear chat messages (keep the welcome message)
+    const messagesContainer = document.getElementById('chatMessages');
+    messagesContainer.innerHTML = `
+        <div class="message assistant">
+            <div class="message-avatar">
+                <img src="/static/images/salesiq-avatar.png" alt="SalesIQ">
+            </div>
+            <div class="message-content">
+                <strong>Welcome to SalesIQ!</strong> I'm your AI sales assistant. I can help you analyze sales calls by:
+                <br><br>
+                • Transcribing audio recordings<br>
+                • Identifying key discussion points<br>
+                • Analyzing customer sentiment<br>
+                • Extracting action items<br>
+                • Providing strategic insights<br>
+                <br>
+                Upload an MP3 file of your sales call to get started, or ask me anything about sales analysis!
+            </div>
+        </div>
+    `;
+
+    // Reset context indicator
+    updateContextIndicator(0);
+
+    // Reset file selection
+    state.selectedFile = null;
+    const audioFileInput = document.getElementById('audioFile');
+    if (audioFileInput) audioFileInput.value = '';
+    const selectedFileDiv = document.getElementById('selectedFile');
+    if (selectedFileDiv) selectedFileDiv.style.display = 'none';
+
+    // Switch to chat page
+    switchPage('chat');
+
+    // If user selected an existing file, re-upload it to the new session
+    if (selectedFilename) {
+        addMessageToChat('user', `Re-analyzing existing file: ${selectedFilename}`);
+        showTypingIndicator();
+
+        try {
+            // Fetch the file from media library and re-upload to new session
+            const fileResponse = await fetch(`/api/media/${encodeURIComponent(selectedFilename)}/download`);
+            if (fileResponse.ok) {
+                const blob = await fileResponse.blob();
+                const formData = new FormData();
+                formData.append('audio', blob, selectedFilename);
+                formData.append('session_id', state.sessionId);
+
+                const uploadResponse = await fetch('/api/upload-audio', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await uploadResponse.json();
+                hideTypingIndicator();
+
+                if (data.success) {
+                    addMessageToChat('assistant', `Audio processed successfully!\n\n${data.message}\n\nYou now have ${data.num_reports_in_context} call(s) in context. Ask me anything about the call!`);
+                    updateContextIndicator(data.num_reports_in_context);
+                } else {
+                    addMessageToChat('assistant', `Error: Failed to process audio - ${data.error}`);
+                }
+            } else {
+                hideTypingIndicator();
+                addMessageToChat('assistant', 'Error: Could not retrieve the selected audio file.');
+            }
+        } catch (error) {
+            console.error('Error re-uploading file:', error);
+            hideTypingIndicator();
+            addMessageToChat('assistant', 'Error: Failed to process the selected audio file.');
+        }
+    }
+}
+
+// Mobile Menu Toggle
+function toggleMobileMenu() {
+    const nav = document.getElementById('leftNav');
+    const overlay = document.getElementById('navOverlay');
+    nav.classList.toggle('open');
+    overlay.classList.toggle('active');
+}
+
+function closeMobileMenu() {
+    const nav = document.getElementById('leftNav');
+    const overlay = document.getElementById('navOverlay');
+    if (nav) nav.classList.remove('open');
+    if (overlay) overlay.classList.remove('active');
+}
+
+// Close mobile menu when a nav item is clicked
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', closeMobileMenu);
+});
+
+// Close modals when clicking outside
 document.addEventListener('click', (e) => {
-    const modal = document.getElementById('reportModal');
-    if (e.target === modal) {
+    const reportModal = document.getElementById('reportModal');
+    if (e.target === reportModal) {
         closeReportModal();
+    }
+    const newSessionModal = document.getElementById('newSessionModal');
+    if (e.target === newSessionModal) {
+        closeNewSessionModal();
     }
 });
