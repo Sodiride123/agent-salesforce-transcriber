@@ -76,30 +76,39 @@ def call_mcp_tool(tool_name, args_json):
         # Use list form of subprocess to avoid shell escaping issues
         result = subprocess.run(
             ['mcp-tools', 'call', tool_name, args_json],
-            capture_output=True, 
+            capture_output=True,
             text=True
         )
+        output = result.stdout + result.stderr
+
+        # Check for session expired error in full output
+        if 'Session expired' in output or 'INVALID_SESSION_ID' in output:
+            return {"error": "Salesforce session has expired. Please reconnect to Salesforce."}
+
         if result.returncode == 0:
             # Strip debug messages from mcp-tools output
             # The JSON starts with { or [
-            output = result.stdout
             json_start = -1
-            for i, char in enumerate(output):
+            for i, char in enumerate(result.stdout):
                 if char in ['{', '[']:
                     json_start = i
                     break
-            
+
             if json_start >= 0:
-                json_str = output[json_start:]
-                return json.loads(json_str)
+                json_str = result.stdout[json_start:]
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    print(f"[MCP] JSON parse error: {e}", file=sys.stderr)
+                    print(f"[MCP] Raw output: {result.stdout[:500]}", file=sys.stderr)
+                    return {"error": f"Failed to parse Salesforce response. Raw output: {result.stdout[:200]}"}
             else:
                 return {"error": "No JSON found in output"}
         else:
-            return {"error": result.stderr}
+            return {"error": result.stderr or "MCP tool call failed"}
     except Exception as e:
         return {"error": str(e)}
 
-# transcribe_audio_file is now imported from audio_transcriber module
 
 def get_api_credentials():
     """Get API credentials from Claude settings file"""
@@ -286,6 +295,14 @@ def index():
 @app.route('/static/<path:path>')
 def send_static(path):
     return send_from_directory('static', path)
+
+@app.route('/api/health/salesforce', methods=['GET'])
+def salesforce_health():
+    """Check if Salesforce connection is working"""
+    result = call_mcp_tool('salesforce_get_accounts', json.dumps({"limit": 1}))
+    if isinstance(result, dict) and 'error' in result:
+        return jsonify({"status": "error", "message": result['error']}), 503
+    return jsonify({"status": "ok", "message": "Salesforce connection is active"})
 
 # Chat endpoints
 @app.route('/api/chat', methods=['POST'])
