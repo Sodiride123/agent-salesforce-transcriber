@@ -89,29 +89,71 @@
                                     • Extracting action items<br>
                                     • Providing strategic insights<br>
                                     <br>
-                                    Upload an MP3 file of your sales call to get started, or ask me anything about sales analysis!
+                                    Upload an audio file of your sales call to get transcription and analysis, or ask me anything about sales strategies and techniques!
                                 </div>
                             </div>
                         </div>
                         
                         <div class="chat-input-area">
-                            <div class="upload-section">
-                                <label for="audioFile" class="upload-label">
-                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 20px; height: 20px; fill: currentColor;">
-                                        <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4 1.79-4 4-4c.58 0 1.14.13 1.64.36V8h4.36v-2h-6v8.5c0 1.38-1.12 2.5-2.5 2.5S7.5 15.88 7.5 14.5s1.12-2.5 2.5-2.5c.19 0 .38.02.56.07V6c0-1.1.9-2 2-2h2c1.1 0 2 .9 2 2z"/>
+                            <div class="input-tabs">
+                                <button class="input-tab active" data-tab="audio" onclick="switchInputTab('audio')">
+                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px; fill: currentColor;">
+                                        <path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/>
                                     </svg>
-                                    <span>Upload Sales Call Audio (MP3, WAV, M4A, OGG)</span>
-                                </label>
-                                <input type="file" id="audioFile" accept=".mp3,.wav,.m4a,.ogg">
-                                <div id="selectedFile" class="selected-file"></div>
+                                    Audio File
+                                </button>
+                                <button class="input-tab" data-tab="document" onclick="switchInputTab('document')">
+                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px; fill: currentColor;">
+                                        <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+                                    </svg>
+                                    Text File
+                                </button>
+                                <button class="input-tab" data-tab="text" onclick="switchInputTab('text')">
+                                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px; fill: currentColor;">
+                                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                                    </svg>
+                                    Paste Text
+                                </button>
                             </div>
-                            
+
+                            <div class="input-panel" id="panel-audio" style="display: block;">
+                                <div class="upload-section">
+                                    <label for="audioFile" class="upload-label">
+                                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 20px; height: 20px; fill: currentColor;">
+                                            <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4 1.79-4 4-4c.58 0 1.14.13 1.64.36V8h4.36v-2h-6v8.5c0 1.38-1.12 2.5-2.5 2.5S7.5 15.88 7.5 14.5s1.12-2.5 2.5-2.5c.19 0 .38.02.56.07V6c0-1.1.9-2 2-2h2c1.1 0 2 .9 2 2z"/>
+                                        </svg>
+                                        <span>Upload Sales Call Audio (MP3, WAV, M4A, OGG)</span>
+                                    </label>
+                                    <input type="file" id="audioFile" accept=".mp3,.wav,.m4a,.ogg">
+                                    <div id="selectedFile" class="selected-file"></div>
+                                </div>
+                            </div>
+
+                            <div class="input-panel" id="panel-document" style="display: none;">
+                                <div class="upload-section">
+                                    <label for="documentFile" class="upload-label">
+                                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 20px; height: 20px; fill: currentColor;">
+                                            <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+                                        </svg>
+                                        <span>Upload Text Document (PDF, TXT)</span>
+                                    </label>
+                                    <input type="file" id="documentFile" accept=".pdf,.txt">
+                                    <div id="selectedDocument" class="selected-file"></div>
+                                </div>
+                            </div>
+
+                            <div class="input-panel" id="panel-text" style="display: none;">
+                                <div class="paste-section">
+                                    <textarea id="pasteText" class="paste-textarea" rows="4" placeholder="Paste your sales conversation text here..."></textarea>
+                                </div>
+                            </div>
+
                             <form id="chatForm" class="chat-input-form">
-                                <input 
-                                    type="text" 
-                                    id="messageInput" 
-                                    class="chat-input" 
-                                    placeholder="Type your message or upload an audio file..."
+                                <input
+                                    type="text"
+                                    id="messageInput"
+                                    class="chat-input"
+                                    placeholder="Type your message or upload a file..."
                                     autocomplete="off"
                                 >
                                 <button type="submit" class="btn btn-primary">Send</button>

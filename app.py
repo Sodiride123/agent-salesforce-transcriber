@@ -19,6 +19,8 @@ UPLOAD_FOLDER = 'uploads'
 REPORTS_FOLDER = 'reports'
 MEDIA_LIBRARY_FOLDER = 'media_library'
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'ogg'}
+ALLOWED_DOCUMENT_EXTENSIONS = {'pdf', 'txt'}
+ALLOWED_MEDIA_EXTENSIONS = ALLOWED_EXTENSIONS | ALLOWED_DOCUMENT_EXTENSIONS
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25MB max file size
@@ -69,6 +71,12 @@ sessions = {}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def allowed_document(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_DOCUMENT_EXTENSIONS
+
+def allowed_media_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_MEDIA_EXTENSIONS
 
 def call_mcp_tool(tool_name, args_json):
     """Call Salesforce MCP tools"""
@@ -172,7 +180,8 @@ def ask_claude_with_context(question, context, history):
         )
         
         # Build system prompt with context
-        system_prompt = f"""You are SalesIQ, an intelligent sales assistant with access to call transcriptions.
+        if context:
+            system_prompt = f"""You are SalesIQ, an intelligent sales assistant with access to call transcriptions.
 
 You have access to the following call transcription(s):
 
@@ -187,6 +196,18 @@ Your role is to:
 - Use bullet points and formatting for clarity
 
 If a question cannot be answered from the available transcription, say so clearly."""
+        else:
+            system_prompt = """You are SalesIQ, an intelligent sales assistant specializing in sales strategy, techniques, and analysis.
+
+No call transcriptions have been uploaded yet. You can still help with:
+- General sales questions, tips, and best practices
+- Sales strategy and methodology advice
+- Objection handling techniques
+- Negotiation tips
+- Sales process optimization
+
+If the user asks about a specific call or transcription, remind them they can upload an audio file to get call-specific analysis.
+Be concise but thorough. Use bullet points and formatting for clarity."""
 
         # Build messages array with history
         messages = [
@@ -330,55 +351,51 @@ def chat():
     
     session = sessions[session_id]
     
-    # Check if there are active reports
-    if not session.active_reports:
-        return jsonify({
-            "message": "I don't have any call transcriptions in context yet. Please upload an audio file first, and then I'll be able to answer questions about it!",
-            "has_context": False,
-            "num_reports": 0
-        })
-    
     # Add user message to history
     session.add_message("user", message)
     print(f"[CHAT] User question: {message}", file=sys.stderr)
     print(f"[CHAT] Session has {len(session.active_reports)} report(s) in context", file=sys.stderr)
-    
-    # Build context from active reports
-    try:
-        context = build_context_from_reports(session.active_reports)
-        print(f"[CHAT] Built context: {len(context)} characters", file=sys.stderr)
-    except Exception as e:
-        print(f"[ERROR] Failed to build context: {str(e)}", file=sys.stderr)
-        return jsonify({
-            "message": "I encountered an error accessing the call transcriptions. Please try again.",
-            "error": str(e),
-            "has_context": True
-        }), 500
-    
-    # Get response from Claude with context
+
+    has_context = len(session.active_reports) > 0
+
+    # Build context from active reports (if any)
+    context = ""
+    if has_context:
+        try:
+            context = build_context_from_reports(session.active_reports)
+            print(f"[CHAT] Built context: {len(context)} characters", file=sys.stderr)
+        except Exception as e:
+            print(f"[ERROR] Failed to build context: {str(e)}", file=sys.stderr)
+            return jsonify({
+                "message": "I encountered an error accessing the call transcriptions. Please try again.",
+                "error": str(e),
+                "has_context": True
+            }), 500
+
+    # Get response from Claude (with or without call context)
     try:
         response_text = ask_claude_with_context(
             question=message,
             context=context,
             history=session.conversation_history
         )
-        
+
         # Add assistant response to history
         session.add_message("assistant", response_text)
-        
+
         return jsonify({
             "message": response_text,
-            "has_context": True,
+            "has_context": has_context,
             "num_reports": len(session.active_reports),
             "timestamp": datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         print(f"[ERROR] Chat error: {str(e)}", file=sys.stderr)
         return jsonify({
             "message": "I apologize, but I encountered an error processing your question. Please try again.",
             "error": str(e),
-            "has_context": True
+            "has_context": has_context
         }), 500
 
 # Audio upload and processing
@@ -482,6 +499,170 @@ def upload_audio():
     
     return jsonify({"error": "Invalid file type"}), 400
 
+# Text analysis endpoint
+@app.route('/api/analyze-text', methods=['POST'])
+def analyze_text():
+    """Analyze pasted plain text as a sales conversation"""
+    data = request.json
+    text = data.get('text', '').strip()
+    session_id = data.get('session_id')
+
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+
+    if len(text) < 20:
+        return jsonify({"error": "Text is too short to analyze. Please provide a longer conversation."}), 400
+
+    if len(text) > 500000:
+        return jsonify({"error": "Text is too long. Please limit to 500,000 characters."}), 400
+
+    if not session_id:
+        return jsonify({"error": "No session_id provided"}), 400
+
+    if session_id not in sessions:
+        sessions[session_id] = Session(session_id)
+        print(f"[SESSION] Created new session: {session_id}", file=sys.stderr)
+
+    # Analyze the text
+    analysis = analyze_sales_call(text, "Pasted Text")
+
+    # Generate title
+    try:
+        summary = analysis.get('summary', '')
+        title = summary.split('.')[0] if '.' in summary else summary[:60]
+        if len(title) > 60:
+            title = title[:57] + "..."
+        if not title:
+            title = f"Text Analysis - {datetime.now().strftime('%B %d, %Y')}"
+    except:
+        title = f"Text Analysis - {datetime.now().strftime('%B %d, %Y')}"
+
+    # Generate report
+    report_id = str(uuid.uuid4())
+    report = {
+        "id": report_id,
+        "title": title,
+        "filename": "Pasted Text",
+        "source_type": "text",
+        "transcription": text,
+        "analysis": analysis,
+        "created_at": datetime.now().isoformat()
+    }
+
+    report_path = os.path.join(REPORTS_FOLDER, f"{report_id}.json")
+    with open(report_path, 'w') as f:
+        json.dump(report, f, indent=2)
+
+    session = sessions[session_id]
+    session.add_report(report_id)
+    print(f"[SESSION] Added text report {report_id} to session {session_id}", file=sys.stderr)
+
+    return jsonify({
+        "success": True,
+        "report_id": report_id,
+        "message": "Text analyzed successfully. You can now ask questions about this conversation!",
+        "context_set": True,
+        "num_reports_in_context": len(session.active_reports)
+    })
+
+# Document upload endpoint
+@app.route('/api/upload-document', methods=['POST'])
+def upload_document():
+    """Upload and process a PDF or TXT document"""
+    if 'document' not in request.files:
+        return jsonify({"error": "No document file provided"}), 400
+
+    file = request.files['document']
+    if file.filename == '':
+        return jsonify({"error": "No file selected"}), 400
+
+    session_id = request.form.get('session_id')
+    if not session_id:
+        return jsonify({"error": "No session_id provided"}), 400
+
+    if session_id not in sessions:
+        sessions[session_id] = Session(session_id)
+        print(f"[SESSION] Created new session: {session_id}", file=sys.stderr)
+
+    if not file or not allowed_document(file.filename):
+        return jsonify({"error": "Invalid file type. Only PDF and TXT files are allowed."}), 400
+
+    filename = secure_filename(file.filename)
+    ext = filename.rsplit('.', 1)[1].lower()
+    unique_filename = f"{uuid.uuid4()}_{filename}"
+
+    # Save to media library
+    media_path = os.path.join(MEDIA_LIBRARY_FOLDER, unique_filename)
+    file.save(media_path)
+
+    # Extract text from document
+    try:
+        if ext == 'txt':
+            with open(media_path, 'r', encoding='utf-8') as f:
+                extracted_text = f.read()
+        elif ext == 'pdf':
+            import PyPDF2
+            extracted_text = ''
+            with open(media_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                for page in reader.pages:
+                    extracted_text += page.extract_text() + '\n'
+            extracted_text = extracted_text.strip()
+        else:
+            return jsonify({"error": "Unsupported file type"}), 400
+
+        if not extracted_text or len(extracted_text.strip()) < 20:
+            return jsonify({"error": "Could not extract enough text from the document. The file may be empty or contain only images."}), 400
+
+    except UnicodeDecodeError:
+        return jsonify({"error": "Could not read the text file. Please ensure it is UTF-8 encoded."}), 400
+    except Exception as e:
+        print(f"[ERROR] Document extraction error: {str(e)}", file=sys.stderr)
+        return jsonify({"error": f"Failed to extract text from document: {str(e)}"}), 500
+
+    # Analyze the extracted text
+    analysis = analyze_sales_call(extracted_text, filename)
+
+    # Generate title
+    try:
+        summary = analysis.get('summary', '')
+        title = summary.split('.')[0] if '.' in summary else summary[:60]
+        if len(title) > 60:
+            title = title[:57] + "..."
+        if not title:
+            title = f"Document Analysis - {datetime.now().strftime('%B %d, %Y')}"
+    except:
+        title = f"Document Analysis - {datetime.now().strftime('%B %d, %Y')}"
+
+    # Generate report
+    report_id = str(uuid.uuid4())
+    report = {
+        "id": report_id,
+        "title": title,
+        "filename": filename,
+        "source_type": "document",
+        "document_file": unique_filename,
+        "transcription": extracted_text,
+        "analysis": analysis,
+        "created_at": datetime.now().isoformat()
+    }
+
+    report_path = os.path.join(REPORTS_FOLDER, f"{report_id}.json")
+    with open(report_path, 'w') as f:
+        json.dump(report, f, indent=2)
+
+    session = sessions[session_id]
+    session.add_report(report_id)
+    print(f"[SESSION] Added document report {report_id} to session {session_id}", file=sys.stderr)
+
+    return jsonify({
+        "success": True,
+        "report_id": report_id,
+        "message": f"Document '{filename}' processed successfully. You can now ask questions about this conversation!",
+        "context_set": True,
+        "num_reports_in_context": len(session.active_reports)
+    })
+
 # Reports endpoints
 @app.route('/api/reports', methods=['GET'])
 def get_reports():
@@ -529,12 +710,18 @@ def get_media():
     """Get all media files"""
     media_files = []
     for filename in os.listdir(MEDIA_LIBRARY_FOLDER):
-        if allowed_file(filename):
+        if allowed_media_file(filename):
             file_path = os.path.join(MEDIA_LIBRARY_FOLDER, filename)
             file_stat = os.stat(file_path)
+            ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+            if ext in ALLOWED_DOCUMENT_EXTENSIONS:
+                file_type = 'document'
+            else:
+                file_type = 'audio'
             media_files.append({
                 "filename": filename,
                 "size": file_stat.st_size,
+                "type": file_type,
                 "created_at": datetime.fromtimestamp(file_stat.st_ctime).isoformat()
             })
     

@@ -4,6 +4,8 @@ const state = {
     reports: [],
     mediaFiles: [],
     selectedFile: null,
+    selectedDocument: null,
+    inputMode: 'audio', // 'audio' | 'document' | 'text'
     sessionId: null
 };
 
@@ -81,14 +83,32 @@ function switchPage(page) {
     }
 }
 
+// Input tab switching
+function switchInputTab(tab) {
+    state.inputMode = tab;
+
+    // Update tab buttons
+    document.querySelectorAll('.input-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+
+    // Show/hide panels
+    document.querySelectorAll('.input-panel').forEach(panel => {
+        panel.style.display = 'none';
+    });
+    const activePanel = document.getElementById(`panel-${tab}`);
+    if (activePanel) activePanel.style.display = 'block';
+}
+
 // Chat functionality
 function initializeChat() {
     const chatForm = document.getElementById('chatForm');
     const audioFileInput = document.getElementById('audioFile');
-    const uploadLabel = document.querySelector('.upload-label');
+    const documentFileInput = document.getElementById('documentFile');
     const selectedFileDiv = document.getElementById('selectedFile');
-    
-    // File selection
+    const selectedDocumentDiv = document.getElementById('selectedDocument');
+
+    // Audio file selection
     audioFileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
             const file = e.target.files[0];
@@ -97,30 +117,53 @@ function initializeChat() {
             selectedFileDiv.style.display = 'block';
         }
     });
-    
+
+    // Document file selection
+    documentFileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            const file = e.target.files[0];
+            state.selectedDocument = file;
+            selectedDocumentDiv.textContent = `Selected: ${file.name}`;
+            selectedDocumentDiv.style.display = 'block';
+        }
+    });
+
     // Chat form submission
     chatForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const messageInput = document.getElementById('messageInput');
         const message = messageInput.value.trim();
-        
-        if (!message && !state.selectedFile) return;
-        
-        // If there's a file, upload it
-        if (state.selectedFile) {
+        const pasteTextArea = document.getElementById('pasteText');
+        const pastedText = pasteTextArea ? pasteTextArea.value.trim() : '';
+
+        // Determine what to submit based on active input mode
+        const hasAudioFile = state.inputMode === 'audio' && state.selectedFile;
+        const hasDocumentFile = state.inputMode === 'document' && state.selectedDocument;
+        const hasPastedText = state.inputMode === 'text' && pastedText;
+
+        if (!message && !hasAudioFile && !hasDocumentFile && !hasPastedText) return;
+
+        // Handle file/text uploads based on active tab
+        if (hasAudioFile) {
             await uploadAudioFile(state.selectedFile);
             state.selectedFile = null;
             audioFileInput.value = '';
             selectedFileDiv.style.display = 'none';
+        } else if (hasDocumentFile) {
+            await uploadDocument(state.selectedDocument);
+            state.selectedDocument = null;
+            documentFileInput.value = '';
+            selectedDocumentDiv.style.display = 'none';
+        } else if (hasPastedText) {
+            await analyzeText(pastedText);
+            pasteTextArea.value = '';
         }
-        
+
         // If there's a message, send it
         if (message) {
             addMessageToChat('user', message);
             messageInput.value = '';
-            
-            // Send to backend
             await sendChatMessage(message);
         }
     });
@@ -261,6 +304,69 @@ async function uploadAudioFile(file) {
         console.error('Error uploading audio:', error);
         hideTypingIndicator();
         addMessageToChat('assistant', 'Error: Failed to upload audio file. Please try again.');
+    }
+}
+
+async function uploadDocument(file) {
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('session_id', state.sessionId);
+
+    addMessageToChat('user', `Uploading document: ${file.name}`);
+    showTypingIndicator();
+
+    try {
+        const response = await fetch('/api/upload-document', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+        hideTypingIndicator();
+
+        if (data.success) {
+            addMessageToChat('assistant', `Success! Document processed successfully!\n\n${data.message}\n\nYou now have ${data.num_reports_in_context} conversation(s) in context. Ask me anything about it!`);
+            updateContextIndicator(data.num_reports_in_context);
+            if (state.currentPage === 'reports') loadReports();
+            if (state.currentPage === 'media') loadMediaLibrary();
+        } else {
+            addMessageToChat('assistant', `Error: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error uploading document:', error);
+        hideTypingIndicator();
+        addMessageToChat('assistant', 'Error: Failed to upload document. Please try again.');
+    }
+}
+
+async function analyzeText(text) {
+    addMessageToChat('user', `Analyzing pasted text (${text.length} characters)...`);
+    showTypingIndicator();
+
+    try {
+        const response = await fetch('/api/analyze-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: text,
+                session_id: state.sessionId
+            })
+        });
+
+        const data = await response.json();
+        hideTypingIndicator();
+
+        if (data.success) {
+            addMessageToChat('assistant', `Success! Text analyzed successfully!\n\n${data.message}\n\nYou now have ${data.num_reports_in_context} conversation(s) in context. Ask me anything about it!`);
+            updateContextIndicator(data.num_reports_in_context);
+            if (state.currentPage === 'reports') loadReports();
+        } else {
+            addMessageToChat('assistant', `Error: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error analyzing text:', error);
+        hideTypingIndicator();
+        addMessageToChat('assistant', 'Error: Failed to analyze text. Please try again.');
     }
 }
 
@@ -493,17 +599,23 @@ function displayMediaLibrary(mediaFiles) {
         return;
     }
     
-    container.innerHTML = mediaFiles.map(file => `
+    container.innerHTML = mediaFiles.map(file => {
+        const isDocument = file.type === 'document';
+        const iconSvg = isDocument
+            ? '<path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>'
+            : '<path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/>';
+        const iconClass = isDocument ? 'media-icon media-icon-document' : 'media-icon';
+        return `
         <div class="media-card">
-            <div class="media-icon">
+            <div class="${iconClass}">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 32px; height: 32px; fill: white;">
-                    <path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/>
+                    ${iconSvg}
                 </svg>
             </div>
             <div class="media-info">
                 <h3>${escapeHtml(file.filename)}</h3>
                 <div class="media-meta">
-                    Size: ${formatFileSize(file.size)}<br>
+                    ${isDocument ? 'Document' : 'Audio'} &middot; Size: ${formatFileSize(file.size)}<br>
                     Uploaded: ${formatDate(file.created_at)}
                 </div>
             </div>
@@ -513,7 +625,7 @@ function displayMediaLibrary(mediaFiles) {
                 </button>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 async function deleteMedia(filename) {
@@ -854,7 +966,7 @@ async function confirmNewSession() {
                 • Extracting action items<br>
                 • Providing strategic insights<br>
                 <br>
-                Upload an MP3 file of your sales call to get started, or ask me anything about sales analysis!
+                Upload an audio file of your sales call to get transcription and analysis, or ask me anything about sales strategies and techniques!
             </div>
         </div>
     `;
@@ -864,10 +976,20 @@ async function confirmNewSession() {
 
     // Reset file selection
     state.selectedFile = null;
+    state.selectedDocument = null;
     const audioFileInput = document.getElementById('audioFile');
     if (audioFileInput) audioFileInput.value = '';
     const selectedFileDiv = document.getElementById('selectedFile');
     if (selectedFileDiv) selectedFileDiv.style.display = 'none';
+    const documentFileInput = document.getElementById('documentFile');
+    if (documentFileInput) documentFileInput.value = '';
+    const selectedDocumentDiv = document.getElementById('selectedDocument');
+    if (selectedDocumentDiv) selectedDocumentDiv.style.display = 'none';
+    const pasteTextArea = document.getElementById('pasteText');
+    if (pasteTextArea) pasteTextArea.value = '';
+
+    // Reset to audio tab
+    switchInputTab('audio');
 
     // Switch to chat page
     switchPage('chat');
@@ -883,10 +1005,22 @@ async function confirmNewSession() {
             if (fileResponse.ok) {
                 const blob = await fileResponse.blob();
                 const formData = new FormData();
-                formData.append('audio', blob, selectedFilename);
                 formData.append('session_id', state.sessionId);
 
-                const uploadResponse = await fetch('/api/upload-audio', {
+                // Determine file type from extension and route to correct endpoint
+                const ext = selectedFilename.split('.').pop().toLowerCase();
+                const isDocument = ['pdf', 'txt'].includes(ext);
+                let endpoint;
+
+                if (isDocument) {
+                    formData.append('document', blob, selectedFilename);
+                    endpoint = '/api/upload-document';
+                } else {
+                    formData.append('audio', blob, selectedFilename);
+                    endpoint = '/api/upload-audio';
+                }
+
+                const uploadResponse = await fetch(endpoint, {
                     method: 'POST',
                     body: formData
                 });
@@ -895,19 +1029,19 @@ async function confirmNewSession() {
                 hideTypingIndicator();
 
                 if (data.success) {
-                    addMessageToChat('assistant', `Audio processed successfully!\n\n${data.message}\n\nYou now have ${data.num_reports_in_context} call(s) in context. Ask me anything about the call!`);
+                    addMessageToChat('assistant', `File processed successfully!\n\n${data.message}\n\nYou now have ${data.num_reports_in_context} conversation(s) in context. Ask me anything about it!`);
                     updateContextIndicator(data.num_reports_in_context);
                 } else {
-                    addMessageToChat('assistant', `Error: Failed to process audio - ${data.error}`);
+                    addMessageToChat('assistant', `Error: Failed to process file - ${data.error}`);
                 }
             } else {
                 hideTypingIndicator();
-                addMessageToChat('assistant', 'Error: Could not retrieve the selected audio file.');
+                addMessageToChat('assistant', 'Error: Could not retrieve the selected file.');
             }
         } catch (error) {
             console.error('Error re-uploading file:', error);
             hideTypingIndicator();
-            addMessageToChat('assistant', 'Error: Failed to process the selected audio file.');
+            addMessageToChat('assistant', 'Error: Failed to process the selected file.');
         }
     }
 }
