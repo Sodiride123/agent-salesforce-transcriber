@@ -31,6 +31,35 @@ function generateUUID() {
     });
 }
 
+// Fetch wrapper with retry and exponential backoff for transient failures
+async function fetchWithRetry(url, options = {}, maxRetries = 3) {
+    const delays = [1000, 3000, 9000]; // 1s, 3s, 9s
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await fetch(url, options);
+            // Don't retry client errors (4xx), only server errors (5xx) and network failures
+            if (response.ok || (response.status >= 400 && response.status < 500)) {
+                return response;
+            }
+            // Server error — retry if attempts remain
+            if (attempt < maxRetries) {
+                console.warn(`[RETRY] ${url} returned ${response.status}, retrying in ${delays[attempt]}ms (attempt ${attempt + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+                continue;
+            }
+            return response; // Return the last failed response
+        } catch (error) {
+            // Network error (server down) — retry if attempts remain
+            if (attempt < maxRetries) {
+                console.warn(`[RETRY] ${url} network error, retrying in ${delays[attempt]}ms (attempt ${attempt + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+                continue;
+            }
+            throw error; // Re-throw on final attempt
+        }
+    }
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     state.sessionId = getSessionId();
@@ -237,12 +266,12 @@ async function sendChatMessage(message) {
         // Show typing indicator
         showTypingIndicator();
         
-        const response = await fetch('/api/chat', {
+        const response = await fetchWithRetry('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 message: message,
                 session_id: state.sessionId
             })
@@ -277,7 +306,7 @@ async function uploadAudioFile(file) {
     showTypingIndicator();
     
     try {
-        const response = await fetch('/api/upload-audio', {
+        const response = await fetchWithRetry('/api/upload-audio', {
             method: 'POST',
             body: formData
         });
@@ -316,7 +345,7 @@ async function uploadDocument(file) {
     showTypingIndicator();
 
     try {
-        const response = await fetch('/api/upload-document', {
+        const response = await fetchWithRetry('/api/upload-document', {
             method: 'POST',
             body: formData
         });
@@ -344,7 +373,7 @@ async function analyzeText(text) {
     showTypingIndicator();
 
     try {
-        const response = await fetch('/api/analyze-text', {
+        const response = await fetchWithRetry('/api/analyze-text', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -373,7 +402,7 @@ async function analyzeText(text) {
 // Reports functionality
 async function loadReports() {
     try {
-        const response = await fetch('/api/reports');
+        const response = await fetchWithRetry('/api/reports');
         const reports = await response.json();
         state.reports = reports;
         displayReports(reports);
@@ -572,7 +601,7 @@ async function deleteReport(reportId) {
 // Media Library functionality
 async function loadMediaLibrary() {
     try {
-        const response = await fetch('/api/media');
+        const response = await fetchWithRetry('/api/media');
         const mediaFiles = await response.json();
         state.mediaFiles = mediaFiles;
         displayMediaLibrary(mediaFiles);

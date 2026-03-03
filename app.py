@@ -18,6 +18,7 @@ CORS(app)
 UPLOAD_FOLDER = 'uploads'
 REPORTS_FOLDER = 'reports'
 MEDIA_LIBRARY_FOLDER = 'media_library'
+SESSIONS_FOLDER = 'sessions'
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'ogg'}
 ALLOWED_DOCUMENT_EXTENSIONS = {'pdf', 'txt'}
 ALLOWED_MEDIA_EXTENSIONS = ALLOWED_EXTENSIONS | ALLOWED_DOCUMENT_EXTENSIONS
@@ -29,23 +30,69 @@ app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25MB max file size
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(REPORTS_FOLDER, exist_ok=True)
 os.makedirs(MEDIA_LIBRARY_FOLDER, exist_ok=True)
+os.makedirs(SESSIONS_FOLDER, exist_ok=True)
 
 # Session Management
 class Session:
-    """Manages user session with conversation history and active reports"""
+    """Manages user session with conversation history and active reports.
+    Sessions are persisted to disk so they survive server restarts."""
     def __init__(self, session_id):
         self.session_id = session_id
         self.active_reports = []  # List of report IDs in context
         self.conversation_history = []  # Chat history
         self.created_at = datetime.now()
         self.last_activity = datetime.now()
-    
+
+    def _save_to_disk(self):
+        """Persist session state to a JSON file"""
+        session_path = os.path.join(SESSIONS_FOLDER, f"{self.session_id}.json")
+        data = {
+            "session_id": self.session_id,
+            "active_reports": self.active_reports,
+            "conversation_history": self.conversation_history,
+            "created_at": self.created_at.isoformat(),
+            "last_activity": self.last_activity.isoformat()
+        }
+        with open(session_path, 'w') as f:
+            json.dump(data, f, indent=2)
+
+    @classmethod
+    def load_from_disk(cls, session_id):
+        """Load a session from disk, returning None if not found"""
+        session_path = os.path.join(SESSIONS_FOLDER, f"{session_id}.json")
+        if not os.path.exists(session_path):
+            return None
+        try:
+            with open(session_path, 'r') as f:
+                data = json.load(f)
+            session = cls(session_id)
+            session.active_reports = data.get("active_reports", [])
+            session.conversation_history = data.get("conversation_history", [])
+            session.created_at = datetime.fromisoformat(data.get("created_at", datetime.now().isoformat()))
+            session.last_activity = datetime.fromisoformat(data.get("last_activity", datetime.now().isoformat()))
+            # Auto-restore: prune report references that no longer exist on disk
+            valid_reports = [
+                rid for rid in session.active_reports
+                if os.path.exists(os.path.join(REPORTS_FOLDER, f"{rid}.json"))
+            ]
+            if len(valid_reports) != len(session.active_reports):
+                removed = set(session.active_reports) - set(valid_reports)
+                print(f"[SESSION] Pruned stale report refs from session {session_id}: {removed}", file=sys.stderr)
+                session.active_reports = valid_reports
+                session._save_to_disk()
+            print(f"[SESSION] Restored session from disk: {session_id} ({len(session.active_reports)} reports, {len(session.conversation_history)} messages)", file=sys.stderr)
+            return session
+        except Exception as e:
+            print(f"[SESSION] Failed to load session {session_id} from disk: {e}", file=sys.stderr)
+            return None
+
     def add_report(self, report_id):
         """Add a report to the active context"""
         if report_id not in self.active_reports:
             self.active_reports.append(report_id)
         self.last_activity = datetime.now()
-    
+        self._save_to_disk()
+
     def add_message(self, role, content):
         """Add a message to conversation history"""
         self.conversation_history.append({
@@ -54,7 +101,8 @@ class Session:
             "timestamp": datetime.now().isoformat()
         })
         self.last_activity = datetime.now()
-    
+        self._save_to_disk()
+
     def get_context_summary(self):
         """Get summary of active context"""
         return {
@@ -66,8 +114,24 @@ class Session:
             "last_activity": self.last_activity.isoformat()
         }
 
-# Global session storage
+# Global session storage (in-memory cache, backed by disk)
 sessions = {}
+
+def get_or_create_session(session_id):
+    """Get session from memory, disk, or create new. Always returns a Session."""
+    if session_id in sessions:
+        return sessions[session_id]
+    # Try loading from disk
+    session = Session.load_from_disk(session_id)
+    if session:
+        sessions[session_id] = session
+        return session
+    # Create new
+    session = Session(session_id)
+    sessions[session_id] = session
+    session._save_to_disk()
+    print(f"[SESSION] Created new session: {session_id}", file=sys.stderr)
+    return session
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -344,12 +408,8 @@ def chat():
             "error": "No session_id provided"
         }), 400
     
-    # Get or create session
-    if session_id not in sessions:
-        sessions[session_id] = Session(session_id)
-        print(f"[SESSION] Created new session for chat: {session_id}", file=sys.stderr)
-    
-    session = sessions[session_id]
+    # Get or create session (restores from disk if server restarted)
+    session = get_or_create_session(session_id)
     
     # Add user message to history
     session.add_message("user", message)
@@ -414,11 +474,9 @@ def upload_audio():
     if not session_id:
         return jsonify({"error": "No session_id provided"}), 400
     
-    # Create session if it doesn't exist
-    if session_id not in sessions:
-        sessions[session_id] = Session(session_id)
-        print(f"[SESSION] Created new session: {session_id}", file=sys.stderr)
-    
+    # Get or create session (restores from disk if server restarted)
+    session = get_or_create_session(session_id)
+
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         unique_filename = f"{uuid.uuid4()}_{filename}"
@@ -479,7 +537,6 @@ def upload_audio():
                 json.dump(report, f, indent=2)
             
             # Link report to session
-            session = sessions[session_id]
             session.add_report(report_id)
             print(f"[SESSION] Added report {report_id} to session {session_id}", file=sys.stderr)
             print(f"[SESSION] Session now has {len(session.active_reports)} report(s)", file=sys.stderr)
@@ -519,9 +576,7 @@ def analyze_text():
     if not session_id:
         return jsonify({"error": "No session_id provided"}), 400
 
-    if session_id not in sessions:
-        sessions[session_id] = Session(session_id)
-        print(f"[SESSION] Created new session: {session_id}", file=sys.stderr)
+    session = get_or_create_session(session_id)
 
     # Analyze the text
     analysis = analyze_sales_call(text, "Pasted Text")
@@ -553,7 +608,6 @@ def analyze_text():
     with open(report_path, 'w') as f:
         json.dump(report, f, indent=2)
 
-    session = sessions[session_id]
     session.add_report(report_id)
     print(f"[SESSION] Added text report {report_id} to session {session_id}", file=sys.stderr)
 
@@ -580,9 +634,7 @@ def upload_document():
     if not session_id:
         return jsonify({"error": "No session_id provided"}), 400
 
-    if session_id not in sessions:
-        sessions[session_id] = Session(session_id)
-        print(f"[SESSION] Created new session: {session_id}", file=sys.stderr)
+    session = get_or_create_session(session_id)
 
     if not file or not allowed_document(file.filename):
         return jsonify({"error": "Invalid file type. Only PDF and TXT files are allowed."}), 400
@@ -651,7 +703,6 @@ def upload_document():
     with open(report_path, 'w') as f:
         json.dump(report, f, indent=2)
 
-    session = sessions[session_id]
     session.add_report(report_id)
     print(f"[SESSION] Added document report {report_id} to session {session_id}", file=sys.stderr)
 
